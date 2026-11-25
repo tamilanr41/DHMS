@@ -1,6 +1,9 @@
 import { Router } from 'express';
+import jwt from 'jsonwebtoken';
 import { query } from '../database/db.js';
 import { ApiError } from '../utils/errors.js';
+import { config } from '../config/env.js';
+import { hashPassword } from '../utils/password.js';
 
 const router = Router();
 
@@ -181,7 +184,7 @@ router.post('/device/verify', async (req, res, next) => {
         clinic_id, device_fingerprint, device_name, os_platform, browser_info, is_authorized
       ) VALUES ($1, $2, $3, $4, $5, true)
       RETURNING *`,
-      [clinic.id, deviceFingerprint, deviceName || 'Clinic Computer', osPlatform || null, browserInfo || null]
+      [clinic.id, deviceFingerprint, deviceName || 'Secondary Station', osPlatform || null, browserInfo || null]
     );
 
     return res.json({
@@ -189,8 +192,7 @@ router.post('/device/verify', async (req, res, next) => {
       clinic,
       activeModules: clinic.active_modules || [],
       maxSystems: clinic.max_systems,
-      deviceId: newDevice.rows[0].id,
-      message: `System registered successfully (${activeCount + 1}/${clinic.max_systems} systems authorized).`
+      deviceId: newDevice.rows[0].id
     });
   } catch (err) {
     next(err);
@@ -222,20 +224,41 @@ router.get('/stats', async (req, res, next) => {
   }
 });
 
-// 2. List all registered clinics with device counts
+// 2. List all registered clinics with rich telemetry & usage details
 router.get('/clinics', async (req, res, next) => {
   try {
     const { rows } = await query(`
       SELECT 
         c.*,
-        COALESCE(d.device_count, 0) AS active_devices_count
+        COALESCE(d.device_count, 0) AS active_devices_count,
+        COALESCE(pat.patient_count, 0) AS patient_count,
+        COALESCE(apt.appointment_count, 0) AS appointment_count,
+        COALESCE(inv.invoice_count, 0) AS invoice_count,
+        COALESCE(usr.user_count, 0) AS user_count,
+        d.last_device_seen
       FROM clinic_tenants c
       LEFT JOIN (
-        SELECT clinic_id, count(*)::int AS device_count 
+        SELECT clinic_id, count(*)::int AS device_count, max(last_seen_at) AS last_device_seen
         FROM clinic_devices 
         WHERE is_authorized = true 
         GROUP BY clinic_id
       ) d ON d.clinic_id = c.id
+      LEFT JOIN (
+        SELECT clinic_id, count(*)::int AS patient_count
+        FROM patients GROUP BY clinic_id
+      ) pat ON pat.clinic_id = c.id
+      LEFT JOIN (
+        SELECT clinic_id, count(*)::int AS appointment_count
+        FROM appointments GROUP BY clinic_id
+      ) apt ON apt.clinic_id = c.id
+      LEFT JOIN (
+        SELECT clinic_id, count(*)::int AS invoice_count
+        FROM invoices GROUP BY clinic_id
+      ) inv ON inv.clinic_id = c.id
+      LEFT JOIN (
+        SELECT clinic_id, count(*)::int AS user_count
+        FROM users GROUP BY clinic_id
+      ) usr ON usr.clinic_id = c.id
       ORDER BY 
         CASE WHEN c.status = 'pending_approval' THEN 0 ELSE 1 END,
         c.created_at DESC
@@ -265,12 +288,10 @@ router.post('/clinics/:id/approve-payment', async (req, res, next) => {
 
     const receiptNo = `TAM-REC-${Math.floor(100000 + Math.random() * 900000)}`;
 
-    // Calculate new validity
     const daysToAdd = monthsNum * 30;
     const validUntilDate = new Date();
     validUntilDate.setDate(validUntilDate.getDate() + daysToAdd);
 
-    // Update clinic record
     const updatedClinic = await query(
       `UPDATE clinic_tenants SET
         status = 'active',
@@ -293,7 +314,6 @@ router.post('/clinics/:id/approve-payment', async (req, res, next) => {
       ]
     );
 
-    // Insert payment record
     if (amountNum > 0) {
       await query(
         `INSERT INTO tamilan_payments (
@@ -375,6 +395,171 @@ router.get('/payments', async (req, res, next) => {
       ORDER BY p.payment_date DESC
     `);
     res.json({ data: rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 8. One-Click Support Impersonation: Master Admin enters Clinic Workspace
+router.post('/clinics/:id/impersonate', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const clinicQ = await query('SELECT * FROM clinic_tenants WHERE id = $1', [id]);
+    if (clinicQ.rows.length === 0) throw ApiError.notFound('Clinic not found');
+    const clinic = clinicQ.rows[0];
+
+    // Find or create an admin user for this clinic
+    let userQ = await query(
+      "SELECT u.*, r.code AS role_code FROM users u JOIN roles r ON r.id = u.role_id WHERE u.clinic_id = $1 AND r.code = 'admin' LIMIT 1",
+      [clinic.id]
+    );
+
+    let user = userQ.rows[0];
+    if (!user) {
+      const defaultHash = await hashPassword('Support@2026');
+      const roleAdmin = await query("SELECT id FROM roles WHERE code = 'admin'");
+      const ins = await query(
+        `INSERT INTO users (username, password_hash, full_name, role_id, clinic_id)
+         VALUES ($1, $2, $3, $4, $5)
+         RETURNING id, username, full_name, clinic_id`,
+        [`admin_${clinic.clinic_code.toLowerCase().replace('-', '_')}`, defaultHash, `${clinic.doctor_name} (Admin)`, roleAdmin.rows[0].id, clinic.id]
+      );
+      user = { ...ins.rows[0], role_code: 'admin' };
+    }
+
+    const token = jwt.sign(
+      { sub: user.id, role: 'admin', name: `Support: ${clinic.clinic_name}`, clinicId: clinic.id, isSupportMode: true },
+      config.auth.jwtSecret,
+      { expiresIn: '12h', issuer: 'zhanx-dentalcare', audience: 'zhanx-desktop' }
+    );
+
+    res.json({
+      success: true,
+      data: {
+        accessToken: token,
+        user: {
+          id: user.id,
+          username: user.username,
+          fullName: user.full_name,
+          role: 'admin',
+          clinicId: clinic.id
+        },
+        clinic: {
+          id: clinic.id,
+          clinicCode: clinic.clinic_code,
+          clinicName: clinic.clinic_name
+        }
+      },
+      message: `Support session established for ${clinic.clinic_name}`
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 9. Reset Clinic Admin Password & Unlock Lockout
+router.post('/clinics/:id/reset-admin-password', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { newPassword } = req.body;
+    const passwordToSet = newPassword || 'Clinic@2026';
+    const hash = await hashPassword(passwordToSet);
+
+    const clinicQ = await query('SELECT * FROM clinic_tenants WHERE id = $1', [id]);
+    if (clinicQ.rows.length === 0) throw ApiError.notFound('Clinic not found');
+
+    const updateRes = await query(
+      `UPDATE users SET password_hash = $1, failed_login_attempts = 0, locked_until = null, updated_at = now()
+       WHERE clinic_id = $2
+       RETURNING id, username, full_name`,
+      [hash, id]
+    );
+
+    if (updateRes.rows.length === 0) {
+      const roleAdmin = await query("SELECT id FROM roles WHERE code = 'admin'");
+      await query(
+        `INSERT INTO users (username, password_hash, full_name, role_id, clinic_id)
+         VALUES ($1, $2, $3, $4, $5)`,
+        ['admin', hash, clinicQ.rows[0].doctor_name, roleAdmin.rows[0].id, id]
+      );
+    }
+
+    res.json({
+      success: true,
+      temporaryPassword: passwordToSet,
+      message: `Password reset to: ${passwordToSet}. Account lockout cleared.`
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 10. Update Active Modules
+router.post('/clinics/:id/modules', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { activeModules } = req.body;
+    if (!Array.isArray(activeModules)) throw ApiError.badRequest('activeModules must be an array');
+    const { rows } = await query(
+      'UPDATE clinic_tenants SET active_modules = $1, updated_at = now() WHERE id = $2 RETURNING *',
+      [JSON.stringify(activeModules), id]
+    );
+    res.json({ success: true, data: rows[0], message: 'Modules updated successfully.' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 11. Extend Subscription Validity
+router.post('/clinics/:id/extend-validity', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { daysToAdd, validUntil } = req.body;
+    let newDate;
+    if (validUntil) {
+      newDate = new Date(validUntil);
+    } else {
+      const days = Number(daysToAdd || 30);
+      const curQ = await query('SELECT valid_until FROM clinic_tenants WHERE id = $1', [id]);
+      const current = curQ.rows[0]?.valid_until ? new Date(curQ.rows[0].valid_until) : new Date();
+      const base = current > new Date() ? current : new Date();
+      base.setDate(base.getDate() + days);
+      newDate = base;
+    }
+
+    const { rows } = await query(
+      `UPDATE clinic_tenants SET valid_until = $1, status = 'active', updated_at = now() WHERE id = $2 RETURNING *`,
+      [newDate.toISOString(), id]
+    );
+    res.json({ success: true, data: rows[0], message: `Subscription extended until ${newDate.toLocaleDateString()}.` });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 12. Update Max Systems / Seat Limits
+router.post('/clinics/:id/seat-limit', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { maxSystems } = req.body;
+    const count = Number(maxSystems);
+    if (!count || count < 1) throw ApiError.badRequest('maxSystems must be at least 1');
+    const { rows } = await query(
+      'UPDATE clinic_tenants SET max_systems = $1, updated_at = now() WHERE id = $2 RETURNING *',
+      [count, id]
+    );
+    res.json({ success: true, data: rows[0], message: `Seat limit updated to ${count} workstation(s).` });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 13. Reset / Unbind all devices for a clinic
+router.post('/clinics/:id/reset-devices', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    await query('DELETE FROM clinic_devices WHERE clinic_id = $1', [id]);
+    res.json({ success: true, message: 'All device bindings cleared. Clinic computers can now freshly connect.' });
   } catch (err) {
     next(err);
   }

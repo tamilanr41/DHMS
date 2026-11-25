@@ -4,9 +4,11 @@ import {
   ShieldCheck, Users, Wallet, Clock, CheckCircle2, AlertTriangle,
   Monitor, Smartphone, Plus, RefreshCw, KeyRound, Lock, Search,
   ArrowRight, Check, X, Ban, Sparkles, MessageCircle, CreditCard,
-  Building2, Laptop, CalendarClock, ChevronRight, UserCheck
+  Building2, Laptop, CalendarClock, ChevronRight, UserCheck,
+  ExternalLink, Wrench, ShieldAlert, Cpu, Stethoscope, Calendar,
+  FileText, Activity, Unlock, Sliders
 } from 'lucide-react';
-import { api } from '../../services/api.js';
+import { api, setAccessToken } from '../../services/api.js';
 import { useToast } from '../../components/ui/Toast.jsx';
 import { formatDate, formatDateTime, formatMoney } from '../../utils/format.js';
 import DoccureKpiCard from '../../components/ui/DoccureKpiCard.jsx';
@@ -22,7 +24,7 @@ const ALL_MODULES = [
   { id: 'labs', label: 'Dental Lab Tracking', desc: 'Crowns, bridges, aligners and fabrication turnarounds' },
   { id: 'inventory', label: 'Inventory & Pharmacy', desc: 'Clinical composites, anesthetics and batch expiry' },
   { id: 'claims', label: 'Insurance & Claims', desc: 'TPA pre-authorizations and copay settlements' },
-  { id: 'reports', label: 'Reports & Analytics', desc: 'Audit-ready financial and clinical performance reports' }
+  { id: 'reports', label: 'Clinical Analytics', desc: 'Audit-ready financial and clinical performance reports' }
 ];
 
 export default function TamilanAdminPage() {
@@ -47,13 +49,23 @@ export default function TamilanAdminPage() {
     paymentMethod: 'UPI',
     transactionRef: '',
     durationMonths: '1',
-    maxSystems: '1', // User requirement: default 1 system
+    maxSystems: '1',
     activeModules: ALL_MODULES.map((m) => m.id),
     notes: ''
   });
 
   const [devicesModalOpen, setDevicesModalOpen] = useState(false);
   const [deviceClinic, setDeviceClinic] = useState(null);
+
+  // Quick-Fix & Issue Solver Toolkit States
+  const [toolkitModalOpen, setToolkitModalOpen] = useState(false);
+  const [toolkitClinic, setToolkitClinic] = useState(null);
+  const [toolkitTab, setToolkitTab] = useState('solve'); // solve | password | modules | validity | seats
+  const [newPasswordInput, setNewPasswordInput] = useState('Clinic@2026');
+  const [selectedModules, setSelectedModules] = useState([]);
+  const [extensionDays, setExtensionDays] = useState('30');
+  const [seatLimitInput, setSeatLimitInput] = useState('1');
+  const [isFixing, setIsFixing] = useState(false);
 
   // Queries
   const statsQuery = useQuery({
@@ -146,6 +158,121 @@ export default function TamilanAdminPage() {
     }
   };
 
+  // 1. One-Click Support Impersonation: Enter Clinic Workspace to Solve Issues
+  const handleImpersonate = async (clinic) => {
+    try {
+      const res = await api.post(`/tamilan/clinics/${clinic.id}/impersonate`);
+      const { accessToken, clinic: clinicData } = res?.data || res;
+      setAccessToken(accessToken);
+      localStorage.setItem('zhanx_my_clinic_code', clinicData.clinicCode);
+      sessionStorage.setItem(
+        'tamilan_support_mode',
+        JSON.stringify({
+          clinicId: clinicData.id,
+          clinicName: clinicData.clinicName,
+          clinicCode: clinicData.clinicCode
+        })
+      );
+      toast.success(`Entering ${clinicData.clinicName} workspace in Master Support Mode...`);
+      setTimeout(() => {
+        window.location.href = '/';
+      }, 500);
+    } catch (err) {
+      toast.error(err.message || 'Failed to enter clinic workspace');
+    }
+  };
+
+  // 2. Open Toolkit
+  const openToolkit = (clinic) => {
+    setToolkitClinic(clinic);
+    setToolkitTab('solve');
+    setNewPasswordInput('Clinic@2026');
+    setSelectedModules(clinic.active_modules?.length ? clinic.active_modules : ALL_MODULES.map((m) => m.id));
+    setExtensionDays('30');
+    setSeatLimitInput(String(clinic.max_systems || 1));
+    setToolkitModalOpen(true);
+  };
+
+  // 3. Reset Admin Password & Unlock Lockout
+  const handleResetPassword = async () => {
+    setIsFixing(true);
+    try {
+      const res = await api.post(`/tamilan/clinics/${toolkitClinic.id}/reset-admin-password`, {
+        newPassword: newPasswordInput.trim()
+      });
+      toast.success(res.message || 'Password reset successfully!');
+      queryClient.invalidateQueries({ queryKey: ['tamilan-clinics'] });
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setIsFixing(false);
+    }
+  };
+
+  // 4. Update Clinical Modules
+  const handleSaveModules = async () => {
+    setIsFixing(true);
+    try {
+      await api.post(`/tamilan/clinics/${toolkitClinic.id}/modules`, {
+        activeModules: selectedModules
+      });
+      toast.success('Clinical modules updated successfully!');
+      queryClient.invalidateQueries({ queryKey: ['tamilan-clinics'] });
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setIsFixing(false);
+    }
+  };
+
+  // 5. Extend Validity
+  const handleExtendValidity = async (days) => {
+    setIsFixing(true);
+    try {
+      const res = await api.post(`/tamilan/clinics/${toolkitClinic.id}/extend-validity`, {
+        daysToAdd: Number(days || extensionDays)
+      });
+      toast.success(res.message || 'Validity extended!');
+      queryClient.invalidateQueries({ queryKey: ['tamilan-clinics'] });
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setIsFixing(false);
+    }
+  };
+
+  // 6. Update Seat Limits
+  const handleUpdateSeatLimit = async () => {
+    setIsFixing(true);
+    try {
+      const res = await api.post(`/tamilan/clinics/${toolkitClinic.id}/seat-limit`, {
+        maxSystems: Number(seatLimitInput)
+      });
+      toast.success(res.message || 'Seat limits updated!');
+      queryClient.invalidateQueries({ queryKey: ['tamilan-clinics'] });
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setIsFixing(false);
+    }
+  };
+
+  // 7. Reset all device hardware bindings
+  const handleResetAllDevices = async () => {
+    if (!window.confirm(`Are you sure you want to clear all workstation locks for ${toolkitClinic.clinic_name}?`)) return;
+    setIsFixing(true);
+    try {
+      const res = await api.post(`/tamilan/clinics/${toolkitClinic.id}/reset-devices`);
+      toast.success(res.message || 'Workstation locks cleared!');
+      queryClient.invalidateQueries({ queryKey: ['tamilan-clinics'] });
+      queryClient.invalidateQueries({ queryKey: ['tamilan-clinic-devices'] });
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setIsFixing(false);
+    }
+  };
+
   const toggleStatus = async (clinic) => {
     const nextStatus = clinic.status === 'active' ? 'suspended' : 'active';
     try {
@@ -173,7 +300,7 @@ export default function TamilanAdminPage() {
     const clean = (clinic.mobile || '').replace(/\D/g, '');
     const num = clean.length === 10 ? `91${clean}` : clean;
     const msg = encodeURIComponent(
-      `Vanakkam Dr. ${clinic.doctor_name}, this is Tamilan Admin regarding ZhanX DentalCare for ${clinic.clinic_name}. Your account status is currently ${clinic.status.toUpperCase()} with ${clinic.max_systems} system license(s). Contact us here for activations, renewals or adding more system seats. Thank you!`
+      `Vanakkam Dr. ${clinic.doctor_name}, this is Master Admin regarding ZhanX DentalCare for ${clinic.clinic_name}. Your account status is currently ${clinic.status.toUpperCase()} with ${clinic.max_systems} system license(s). Contact us here for support, renewals or adding more system seats. Thank you!`
     );
     window.open(`https://wa.me/${num}?text=${msg}`, '_blank');
   };
@@ -212,10 +339,10 @@ export default function TamilanAdminPage() {
               Restricted Master Console
             </span>
             <h1 className="mt-3 text-2xl font-black tracking-tight text-white">
-              Enterprise Super Admin
+              Enterprise Master Admin
             </h1>
             <p className="mt-1 text-xs font-medium text-slate-400">
-              Enter master security authorization PIN to manage multi-clinic licenses, device locks &amp; subscriptions.
+              Enter master security authorization PIN to manage multi-clinic licenses, solve clinic issues &amp; control subscriptions.
             </p>
           </div>
 
@@ -242,7 +369,7 @@ export default function TamilanAdminPage() {
               type="submit"
               className="w-full rounded-2xl bg-gradient-to-r from-[#009da6] to-[#08636d] py-3 text-xs font-black text-white hover:opacity-95 shadow-lg shadow-teal-700/30 transition cursor-pointer"
             >
-              Unlock Admin Console →
+              Unlock Master Console →
             </button>
           </form>
 
@@ -273,13 +400,13 @@ export default function TamilanAdminPage() {
           <div className="space-y-1.5">
             <div className="inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-0.5 text-xs font-black tracking-wide text-white backdrop-blur-sm">
               <ShieldCheck size={14} className="stroke-[2.5]" />
-              ENTERPRISE MASTER ADMIN · SaaS LICENSING SUITE
+              MASTER COMMAND CENTER · LIVE CLINIC DIAGNOSTICS &amp; SUPPORT
             </div>
             <h1 className="text-2xl font-black tracking-tight sm:text-3xl">
-              Clinic Registration &amp; Device Seat Control
+              Clinic Operations &amp; Issue Resolution Console
             </h1>
             <p className="max-w-2xl text-xs sm:text-sm font-medium text-teal-50/90 leading-relaxed">
-              Verify clinic signups, collect subscription fees, lock usage to authorized single/multi computers, grant module permissions, and manage recurring renewals.
+              Monitor what each clinic is using, enter any clinic workspace in 1-click to solve problems, reset passwords, manage workstation locks, and configure live modules.
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -298,7 +425,7 @@ export default function TamilanAdminPage() {
         </div>
       </div>
 
-      {/* KPI Cards: Strictly Matches Waiting Queue Screenshot */}
+      {/* KPI Cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <DoccureKpiCard
           title="TOTAL CLINICS"
@@ -345,7 +472,7 @@ export default function TamilanAdminPage() {
                   : 'text-slate-500 hover:text-slate-900 dark:text-slate-400'
               }`}
             >
-              Clinic Licenses ({stats.totalClinics})
+              Clinic Operations &amp; Telemetry ({stats.totalClinics})
             </button>
             <button
               type="button"
@@ -368,7 +495,7 @@ export default function TamilanAdminPage() {
                 queryClient.invalidateQueries({ queryKey: ['tamilan-stats'] });
               }}
               className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300 transition shadow-2xs cursor-pointer"
-              title="Refresh"
+              title="Refresh Registry"
             >
               <RefreshCw size={14} className={clinicsQuery.isFetching ? 'animate-spin text-[#0a7f8b]' : ''} />
             </button>
@@ -479,14 +606,36 @@ export default function TamilanAdminPage() {
                           </p>
                         </div>
 
-                        {/* Seat / System Lock Indicator (User Requirement) */}
-                        <div className="mt-3.5 rounded-2xl bg-teal-50/50 p-3 border border-teal-100/70 text-xs dark:bg-teal-950/20 dark:border-teal-900/40">
-                          <div className="flex items-center justify-between">
-                            <span className="flex items-center gap-1.5 font-bold text-slate-700 dark:text-slate-300">
-                              <Laptop size={14} className="text-[#0a7f8b]" />
-                              Authorized Computers:
+                        {/* LIVE USAGE TELEMETRY (What they are using) */}
+                        <div className="mt-3 grid grid-cols-3 gap-2 rounded-2xl bg-slate-50/90 p-2.5 text-center text-xs dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
+                          <div>
+                            <span className="block text-[10px] font-bold text-slate-400 uppercase">Patients</span>
+                            <span className="font-black text-sm text-slate-800 dark:text-white tabular-nums">
+                              {c.patient_count ?? 0}
                             </span>
-                            <span className={`font-black font-mono px-2 py-0.5 rounded-lg text-xs ${
+                          </div>
+                          <div className="border-x border-slate-200/80 dark:border-slate-700">
+                            <span className="block text-[10px] font-bold text-slate-400 uppercase">Appts</span>
+                            <span className="font-black text-sm text-[#0a7f8b] dark:text-teal-300 tabular-nums">
+                              {c.appointment_count ?? 0}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="block text-[10px] font-bold text-slate-400 uppercase">Invoices</span>
+                            <span className="font-black text-sm text-emerald-600 dark:text-emerald-400 tabular-nums">
+                              {c.invoice_count ?? 0}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Workstations / Seat Lock */}
+                        <div className="mt-3 rounded-2xl bg-teal-50/50 p-2.5 border border-teal-100/70 text-xs dark:bg-teal-950/20 dark:border-teal-900/40">
+                          <div className="flex items-center justify-between">
+                            <span className="flex items-center gap-1.5 font-bold text-slate-700 dark:text-slate-300 text-[11px]">
+                              <Laptop size={13} className="text-[#0a7f8b]" />
+                              Authorized Workstations:
+                            </span>
+                            <span className={`font-black font-mono px-2 py-0.5 rounded-lg text-[11px] ${
                               activeDevices >= maxSystems
                                 ? 'bg-amber-100 text-amber-800'
                                 : 'bg-white text-[#0a7f8b] border border-teal-200'
@@ -494,23 +643,18 @@ export default function TamilanAdminPage() {
                               {activeDevices} / {maxSystems} system{maxSystems === 1 ? '' : 's'}
                             </span>
                           </div>
-                          <p className="mt-1 text-[10.5px] text-slate-500 font-medium">
-                            {maxSystems === 1
-                              ? 'Strict 1-system lock. Gated if opened on secondary computer.'
-                              : `Multi-seat license permitting up to ${maxSystems} systems.`}
-                          </p>
                         </div>
 
                         {/* Validity & Amount */}
-                        <div className="mt-3 space-y-1.5 rounded-2xl bg-slate-50/80 p-3 text-xs dark:bg-slate-800/50">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[11px] font-bold text-slate-400">Valid Until:</span>
+                        <div className="mt-2.5 space-y-1 rounded-2xl bg-slate-50/80 p-2.5 text-xs dark:bg-slate-800/40">
+                          <div className="flex items-center justify-between text-[11px]">
+                            <span className="font-semibold text-slate-400">Valid Until:</span>
                             <span className="font-bold text-slate-800 dark:text-slate-200">
                               {c.valid_until ? formatDate(c.valid_until) : 'Not Activated'}
                             </span>
                           </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-[11px] font-bold text-slate-400">Total Paid:</span>
+                          <div className="flex items-center justify-between text-[11px]">
+                            <span className="font-semibold text-slate-400">Total Collected:</span>
                             <span className="font-black text-emerald-600 dark:text-emerald-400 tabular-nums">
                               {formatMoney(c.amount_paid)}
                             </span>
@@ -518,18 +662,15 @@ export default function TamilanAdminPage() {
                         </div>
 
                         {/* Active Modules Chips */}
-                        <div className="mt-3">
-                          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-                            Permitted Modules:
-                          </p>
+                        <div className="mt-2.5">
                           <div className="flex flex-wrap gap-1">
                             {(c.active_modules?.length ? c.active_modules : c.requested_modules || []).slice(0, 4).map((mod) => (
-                              <span key={mod} className="rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                              <span key={mod} className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[9.5px] font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                                 {mod}
                               </span>
                             ))}
                             {(c.active_modules?.length ? c.active_modules : c.requested_modules || []).length > 4 && (
-                              <span className="rounded-md bg-teal-50 px-1.5 py-0.5 text-[10px] font-bold text-[#0a7f8b]">
+                              <span className="rounded-md bg-teal-50 px-1 py-0.5 text-[9.5px] font-bold text-[#0a7f8b]">
                                 +{(c.active_modules?.length ? c.active_modules : c.requested_modules || []).length - 4} more
                               </span>
                             )}
@@ -540,6 +681,29 @@ export default function TamilanAdminPage() {
                       {/* Footer Actions */}
                       <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2">
                         <div className="flex items-center gap-1.5">
+                          {/* Solve Issue / Open Workspace */}
+                          {isActive && (
+                            <button
+                              type="button"
+                              onClick={() => handleImpersonate(c)}
+                              className="inline-flex items-center gap-1 rounded-xl bg-gradient-to-r from-teal-500 to-cyan-600 px-2.5 py-1.5 text-[11px] font-bold text-white shadow-sm hover:from-teal-600 hover:to-cyan-700 transition cursor-pointer"
+                              title="Enter Clinic Workspace in Master Support Mode to troubleshoot or solve any problem"
+                            >
+                              <ExternalLink size={12} />
+                              <span>Solve in Workspace</span>
+                            </button>
+                          )}
+
+                          {/* Quick-Fix Toolkit Modal Button */}
+                          <button
+                            type="button"
+                            onClick={() => openToolkit(c)}
+                            className="flex h-8 w-8 items-center justify-center rounded-xl border border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100 transition cursor-pointer shadow-2xs"
+                            title="Master Diagnostics & Quick Fix Toolkit"
+                          >
+                            <Wrench size={13} />
+                          </button>
+
                           <button
                             type="button"
                             onClick={() => openWhatsApp(c)}
@@ -548,6 +712,7 @@ export default function TamilanAdminPage() {
                           >
                             <MessageCircle size={14} />
                           </button>
+
                           <button
                             type="button"
                             onClick={() => {
@@ -559,28 +724,18 @@ export default function TamilanAdminPage() {
                           >
                             <Laptop size={14} />
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => toggleStatus(c)}
-                            className={`flex h-8 w-8 items-center justify-center rounded-xl border transition cursor-pointer shadow-2xs ${
-                              isActive
-                                ? 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100'
-                                : 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                            }`}
-                            title={isActive ? 'Suspend access' : 'Unsuspend access'}
-                          >
-                            {isActive ? <Ban size={13} /> : <Check size={13} />}
-                          </button>
                         </div>
 
-                        <button
-                          type="button"
-                          onClick={() => openActivation(c)}
-                          className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-[#009da6] to-[#08636d] px-3.5 py-1.5 text-xs font-black text-white hover:opacity-95 shadow-sm transition cursor-pointer"
-                        >
-                          <CreditCard size={13} />
-                          {isPending ? 'Approve & Activate' : 'Renew / Seat'}
-                        </button>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => openActivation(c)}
+                            className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-[#009da6] to-[#08636d] px-3 py-1.5 text-xs font-black text-white hover:opacity-95 shadow-sm transition cursor-pointer"
+                          >
+                            <CreditCard size={12} />
+                            {isPending ? 'Approve & Activate' : 'Renew / License'}
+                          </button>
+                        </div>
                       </div>
                     </article>
                   );
@@ -592,7 +747,7 @@ export default function TamilanAdminPage() {
           /* Payments Ledger */
           <div className="space-y-3">
             <h3 className="text-sm font-black text-slate-900 dark:text-white">
-              Tamilan Super Admin Fee Collection History
+              Master Admin Fee Collection History
             </h3>
             <div className="overflow-x-auto rounded-2xl border border-slate-200">
               <table className="w-full text-left text-xs">
@@ -632,6 +787,273 @@ export default function TamilanAdminPage() {
         )}
       </div>
 
+      {/* ========================================================================= */}
+      {/* MASTER ISSUE RESOLUTION & DIAGNOSTICS TOOLKIT MODAL                       */}
+      {/* ========================================================================= */}
+      <Modal
+        open={toolkitModalOpen}
+        onClose={() => setToolkitModalOpen(false)}
+        title={toolkitClinic ? `Troubleshoot & Fix: ${toolkitClinic.clinic_name}` : 'Clinic Issue Resolution'}
+        subtitle="One-stop master tools to solve passwords, module locks, workstation limits, and validity issues."
+        size="lg"
+      >
+        {toolkitClinic && (
+          <div className="space-y-4">
+            {/* Top Diagnostics Card */}
+            <div className="rounded-2xl border border-purple-200 bg-purple-50/40 p-4 text-xs dark:bg-purple-950/20 dark:border-purple-900/40">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-purple-200/60 pb-2.5">
+                <div>
+                  <h4 className="font-black text-slate-900 dark:text-white text-sm">{toolkitClinic.clinic_name}</h4>
+                  <p className="text-slate-500 mt-0.5 font-mono">{toolkitClinic.clinic_code} · {toolkitClinic.doctor_name} · {toolkitClinic.mobile}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleImpersonate(toolkitClinic)}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-teal-500 to-cyan-600 px-3 py-1.5 text-xs font-black text-white hover:opacity-95 shadow-sm transition cursor-pointer"
+                >
+                  <ExternalLink size={13} />
+                  <span>Launch Workspace &amp; Fix</span>
+                </button>
+              </div>
+
+              {/* Telemetry Row */}
+              <div className="mt-3 grid grid-cols-4 gap-2 text-center">
+                <div className="rounded-xl bg-white/80 p-2 dark:bg-slate-900/60">
+                  <span className="block text-[10px] font-bold text-slate-400">Patients</span>
+                  <span className="font-black text-sm text-slate-800 dark:text-white">{toolkitClinic.patient_count ?? 0}</span>
+                </div>
+                <div className="rounded-xl bg-white/80 p-2 dark:bg-slate-900/60">
+                  <span className="block text-[10px] font-bold text-slate-400">Appointments</span>
+                  <span className="font-black text-sm text-[#0a7f8b] dark:text-teal-300">{toolkitClinic.appointment_count ?? 0}</span>
+                </div>
+                <div className="rounded-xl bg-white/80 p-2 dark:bg-slate-900/60">
+                  <span className="block text-[10px] font-bold text-slate-400">Invoices</span>
+                  <span className="font-black text-sm text-emerald-600 dark:text-emerald-400">{toolkitClinic.invoice_count ?? 0}</span>
+                </div>
+                <div className="rounded-xl bg-white/80 p-2 dark:bg-slate-900/60">
+                  <span className="block text-[10px] font-bold text-slate-400">Workstations</span>
+                  <span className="font-black text-sm text-purple-600 dark:text-purple-400">{toolkitClinic.active_devices_count ?? 0}/{toolkitClinic.max_systems}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Sub-tabs for toolkit actions */}
+            <div className="flex border-b border-slate-200 dark:border-slate-800 gap-2">
+              <button
+                type="button"
+                onClick={() => setToolkitTab('solve')}
+                className={`pb-2 text-xs font-bold transition cursor-pointer ${
+                  toolkitTab === 'solve'
+                    ? 'border-b-2 border-purple-600 text-purple-700 dark:text-purple-300'
+                    : 'text-slate-400 hover:text-slate-700'
+                }`}
+              >
+                1. Password &amp; Lockout Fix
+              </button>
+              <button
+                type="button"
+                onClick={() => setToolkitTab('modules')}
+                className={`pb-2 text-xs font-bold transition cursor-pointer ${
+                  toolkitTab === 'modules'
+                    ? 'border-b-2 border-purple-600 text-purple-700 dark:text-purple-300'
+                    : 'text-slate-400 hover:text-slate-700'
+                }`}
+              >
+                2. Clinical Modules ({selectedModules.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setToolkitTab('seats')}
+                className={`pb-2 text-xs font-bold transition cursor-pointer ${
+                  toolkitTab === 'seats'
+                    ? 'border-b-2 border-purple-600 text-purple-700 dark:text-purple-300'
+                    : 'text-slate-400 hover:text-slate-700'
+                }`}
+              >
+                3. Workstation Hardware Lock
+              </button>
+              <button
+                type="button"
+                onClick={() => setToolkitTab('validity')}
+                className={`pb-2 text-xs font-bold transition cursor-pointer ${
+                  toolkitTab === 'validity'
+                    ? 'border-b-2 border-purple-600 text-purple-700 dark:text-purple-300'
+                    : 'text-slate-400 hover:text-slate-700'
+                }`}
+              >
+                4. Subscription Extension
+              </button>
+            </div>
+
+            {/* TAB 1: Password & Lockout Fix */}
+            {toolkitTab === 'solve' && (
+              <div className="space-y-3.5 py-1 text-xs">
+                <p className="text-slate-500 text-[11.5px]">
+                  If the doctor forgot their password or had multiple failed logins resulting in an account lockout, you can reset it instantly here:
+                </p>
+                <div className="flex items-center gap-3">
+                  <div className="relative flex-1">
+                    <KeyRound size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      value={newPasswordInput}
+                      onChange={(e) => setNewPasswordInput(e.target.value)}
+                      placeholder="Enter new password (e.g. Clinic@2026)"
+                      className="w-full rounded-xl border border-slate-300 pl-9 pr-3 py-2 text-xs font-bold text-slate-800 focus:border-purple-600 focus:outline-none"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    disabled={isFixing}
+                    onClick={handleResetPassword}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 px-4 py-2 text-xs font-black text-white transition shadow-sm cursor-pointer disabled:opacity-50"
+                  >
+                    <Unlock size={13} />
+                    <span>Reset Password &amp; Clear Lockout</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 2: Modules Manager */}
+            {toolkitTab === 'modules' && (
+              <div className="space-y-3 py-1 text-xs">
+                <p className="text-slate-500 text-[11.5px]">
+                  Enable or disable specific dental features for this clinic in real-time without re-deploying:
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
+                  {ALL_MODULES.map((m) => {
+                    const checked = selectedModules.includes(m.id);
+                    return (
+                      <label
+                        key={m.id}
+                        className={`flex items-start gap-2.5 rounded-xl border p-2.5 cursor-pointer transition ${
+                          checked
+                            ? 'border-purple-500 bg-purple-50/70 text-slate-900 font-bold dark:bg-purple-950/40 dark:text-white'
+                            : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => {
+                            const next = e.target.checked
+                              ? [...selectedModules, m.id]
+                              : selectedModules.filter((id) => id !== m.id);
+                            setSelectedModules(next);
+                          }}
+                          className="mt-0.5 rounded text-purple-600 focus:ring-0"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs truncate">{m.label}</p>
+                          <p className="text-[10px] text-slate-400 truncate font-normal">{m.desc}</p>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+                <div className="pt-1 flex justify-end">
+                  <button
+                    type="button"
+                    disabled={isFixing}
+                    onClick={handleSaveModules}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 px-4 py-2 text-xs font-black text-white transition shadow-sm cursor-pointer disabled:opacity-50"
+                  >
+                    <Check size={14} />
+                    <span>Save Feature Modules</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 3: Workstations & Hardware Lock */}
+            {toolkitTab === 'seats' && (
+              <div className="space-y-3.5 py-1 text-xs">
+                <p className="text-slate-500 text-[11.5px]">
+                  Manage how many computers this clinic can run on simultaneously, or unbind all PCs if they bought new hardware:
+                </p>
+                <div className="flex items-center gap-3">
+                  <div className="w-48">
+                    <label className="block text-[11px] font-bold text-slate-500 mb-1">Workstation Quota</label>
+                    <select
+                      value={seatLimitInput}
+                      onChange={(e) => setSeatLimitInput(e.target.value)}
+                      className="w-full rounded-xl border border-slate-300 px-3 py-2 text-xs font-bold text-slate-800 focus:border-purple-600 focus:outline-none"
+                    >
+                      <option value="1">1 Computer (Strict Single Seat)</option>
+                      <option value="2">2 Computers (Reception + Chair)</option>
+                      <option value="3">3 Computers (Reception + 2 Chairs)</option>
+                      <option value="5">5 Computers (Hospital Setup)</option>
+                      <option value="10">10 Computers (Enterprise)</option>
+                    </select>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={isFixing}
+                    onClick={handleUpdateSeatLimit}
+                    className="mt-5 inline-flex items-center gap-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 px-4 py-2 text-xs font-black text-white transition shadow-sm cursor-pointer disabled:opacity-50"
+                  >
+                    <span>Update Seat Limit</span>
+                  </button>
+                </div>
+
+                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-bold text-slate-800 dark:text-white">Hardware Lock Emergency Reset</p>
+                      <p className="text-[11px] text-slate-400">If the clinic replaced their computers or reinstalled Windows and are locked out:</p>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={isFixing}
+                      onClick={handleResetAllDevices}
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-rose-300 bg-rose-50 hover:bg-rose-100 text-rose-700 px-3.5 py-2 text-xs font-bold transition cursor-pointer"
+                    >
+                      <AlertTriangle size={13} />
+                      <span>Clear All PC Bindings</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 4: Subscription Validity */}
+            {toolkitTab === 'validity' && (
+              <div className="space-y-3.5 py-1 text-xs">
+                <p className="text-slate-500 text-[11.5px]">
+                  Extend subscription validity or grant bonus trial days with a single click:
+                </p>
+                <div className="flex flex-wrap gap-2.5">
+                  <button
+                    type="button"
+                    disabled={isFixing}
+                    onClick={() => handleExtendValidity(30)}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-purple-200 bg-purple-50 hover:bg-purple-100 px-3.5 py-2 text-xs font-bold text-purple-700 transition cursor-pointer"
+                  >
+                    <span>+30 Days</span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isFixing}
+                    onClick={() => handleExtendValidity(90)}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-purple-200 bg-purple-50 hover:bg-purple-100 px-3.5 py-2 text-xs font-bold text-purple-700 transition cursor-pointer"
+                  >
+                    <span>+90 Days (Quarterly)</span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isFixing}
+                    onClick={() => handleExtendValidity(365)}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 px-4 py-2 text-xs font-black text-white transition shadow-sm cursor-pointer"
+                  >
+                    <span>+1 Year (365 Days)</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
+
       {/* Collect Payment & Activate Modal */}
       <Modal
         open={activateModalOpen}
@@ -661,13 +1083,11 @@ export default function TamilanAdminPage() {
       >
         {selectedClinic && (
           <div className="space-y-4">
-            {/* Clinic Mini Card */}
             <div className="rounded-2xl border border-teal-100 bg-teal-50/50 p-4 text-xs">
               <p className="font-black text-slate-900 text-sm">{selectedClinic.clinic_name} ({selectedClinic.clinic_code})</p>
               <p className="text-slate-600 mt-0.5 font-medium">Doctor: {selectedClinic.doctor_name} · Mobile: {selectedClinic.mobile}</p>
             </div>
 
-            {/* Payment & Systems Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
@@ -715,7 +1135,6 @@ export default function TamilanAdminPage() {
                 </select>
               </div>
 
-              {/* Authorized Systems / Seats Selection (User Requirement) */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
                   Authorized Computers / Seats (Lock)
@@ -731,9 +1150,6 @@ export default function TamilanAdminPage() {
                   <option value="5">5 Systems (Hospital / Multi-chair)</option>
                   <option value="10">10 Systems (Full Enterprise)</option>
                 </select>
-                <p className="mt-1 text-[10.5px] text-slate-400 font-medium">
-                  Software locks to exactly this number of computers.
-                </p>
               </div>
 
               <div className="sm:col-span-2">
@@ -748,100 +1164,108 @@ export default function TamilanAdminPage() {
                   className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-medium text-slate-900 focus:border-[#009da6] focus:outline-none"
                 />
               </div>
-            </div>
 
-            {/* Permitted Modules Checkboxes */}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-2">
-                Authorized Module Permissions
-              </label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
-                {ALL_MODULES.map((m) => {
-                  const checked = activationForm.activeModules.includes(m.id);
-                  return (
-                    <label
-                      key={m.id}
-                      className={`flex items-start gap-2.5 rounded-xl border p-2.5 transition cursor-pointer ${
-                        checked ? 'border-teal-200 bg-teal-50/40 text-slate-900' : 'border-slate-200 bg-white text-slate-500'
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={(e) => {
-                          const next = e.target.checked
-                            ? [...activationForm.activeModules, m.id]
-                            : activationForm.activeModules.filter((id) => id !== m.id);
-                          setActivationForm({ ...activationForm, activeModules: next });
-                        }}
-                        className="mt-0.5 rounded text-[#009da6] focus:ring-[#009da6]"
-                      />
-                      <div className="min-w-0">
-                        <p className="text-xs font-black">{m.label}</p>
-                        <p className="text-[10px] text-slate-400 truncate">{m.desc}</p>
-                      </div>
-                    </label>
-                  );
-                })}
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-bold text-slate-700 mb-2">
+                  Feature Modules Granted ({activationForm.activeModules.length} selected)
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-44 overflow-y-auto pr-1">
+                  {ALL_MODULES.map((m) => {
+                    const checked = activationForm.activeModules.includes(m.id);
+                    return (
+                      <label
+                        key={m.id}
+                        className={`flex items-start gap-2 rounded-xl border p-2 text-xs cursor-pointer transition ${
+                          checked
+                            ? 'border-teal-500 bg-teal-50/60 text-slate-900 font-bold'
+                            : 'border-slate-200 bg-slate-50/60 text-slate-400 hover:border-slate-300'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => {
+                            const next = e.target.checked
+                              ? [...activationForm.activeModules, m.id]
+                              : activationForm.activeModules.filter((id) => id !== m.id);
+                            setActivationForm({ ...activationForm, activeModules: next });
+                          }}
+                          className="mt-0.5 rounded text-[#009da6] focus:ring-0"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate">{m.label}</p>
+                          <p className="text-[10px] text-slate-400 font-normal truncate">{m.desc}</p>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Private Admin Notes
+                </label>
+                <textarea
+                  rows={2}
+                  value={activationForm.notes}
+                  onChange={(e) => setActivationForm({ ...activationForm, notes: e.target.value })}
+                  placeholder="Add notes about payment or license agreement..."
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs text-slate-900 focus:border-[#009da6] focus:outline-none"
+                />
               </div>
             </div>
           </div>
         )}
       </Modal>
 
-      {/* Authorized Devices / Computer Binding Modal */}
+      {/* Authorized Devices / Seat Lock Inspection Modal */}
       <Modal
         open={devicesModalOpen}
         onClose={() => setDevicesModalOpen(false)}
-        title={deviceClinic ? `Authorized Computers: ${deviceClinic.clinic_name}` : 'Authorized Computers'}
-        subtitle={`This clinic is authorized for ${deviceClinic?.max_systems || 1} system(s).`}
+        title={deviceClinic ? `Hardware Workstations: ${deviceClinic.clinic_name}` : 'Authorized Workstations'}
+        subtitle={`Provisioned for ${deviceClinic?.max_systems || 1} workstation seat(s). You can revoke broken or replaced computers.`}
         size="md"
-        footer={
-          <button
-            type="button"
-            onClick={() => setDevicesModalOpen(false)}
-            className="rounded-2xl border border-slate-200 bg-white px-5 py-2 text-xs font-black text-slate-700 hover:bg-slate-50 transition"
-          >
-            Close
-          </button>
-        }
       >
         <div className="space-y-3">
-          {(clinicDevicesQuery.data || []).length === 0 ? (
+          {clinicDevicesQuery.isLoading ? (
+            <div className="py-8 text-center">
+              <RefreshCw size={20} className="mx-auto animate-spin text-[#0a7f8b]" />
+            </div>
+          ) : (clinicDevicesQuery.data || []).length === 0 ? (
             <div className="py-8 text-center text-xs text-slate-400">
               <Laptop size={32} className="mx-auto text-slate-300 mb-2" />
-              No computers bound yet. The first computer the clinic opens will automatically bind as Seat 1.
+              No computers currently bound to this clinic workspace.
             </div>
           ) : (
             <div className="divide-y divide-slate-100">
-              {(clinicDevicesQuery.data || []).map((dev, idx) => (
-                <div key={dev.id} className="py-3 flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-xs font-bold text-slate-900">Seat {idx + 1}: {dev.device_name || 'Clinic Computer'}</span>
-                      <span className="rounded bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.2 text-[9.5px] font-black uppercase">
-                        Authorized
-                      </span>
-                    </div>
-                    <p className="text-[11px] font-mono text-slate-400 mt-0.5 truncate">
-                      ID: {dev.device_fingerprint} · Last active: {formatDateTime(dev.last_seen_at)}
+              {(clinicDevicesQuery.data || []).map((dev) => (
+                <div key={dev.id} className="py-3 flex items-center justify-between text-xs">
+                  <div className="space-y-0.5">
+                    <p className="font-bold text-slate-900 flex items-center gap-1.5">
+                      <Monitor size={13} className="text-[#0a7f8b]" />
+                      {dev.device_name || 'Clinic Workstation'}
+                    </p>
+                    <p className="text-[10.5px] font-mono text-slate-400">
+                      ID: {dev.device_fingerprint} · OS: {dev.os_platform || 'Windows'}
+                    </p>
+                    <p className="text-[10px] text-slate-400">
+                      Last seen: {formatDateTime(dev.last_seen_at)}
                     </p>
                   </div>
+
                   <button
                     type="button"
                     onClick={() => revokeDevice(dev.id)}
-                    className="inline-flex items-center gap-1 rounded-xl bg-rose-50 px-2.5 py-1 text-xs font-bold text-rose-700 hover:bg-rose-100 transition shrink-0"
-                    title="Remove device authorization to free up seat"
+                    className="inline-flex items-center gap-1 rounded-xl border border-rose-200 bg-rose-50 px-2.5 py-1 text-[11px] font-bold text-rose-700 hover:bg-rose-100 transition cursor-pointer"
                   >
-                    <X size={12} /> Revoke Seat
+                    <X size={12} />
+                    <span>Revoke Seat</span>
                   </button>
                 </div>
               ))}
             </div>
           )}
-          <p className="text-[11px] text-slate-400 leading-relaxed pt-2 border-t border-slate-100">
-            Revoking a seat frees it up immediately so the clinic can bind a new replacement computer if their PC was formatted or upgraded.
-          </p>
         </div>
       </Modal>
     </div>

@@ -3,15 +3,16 @@
 # ===================================================
 
 [build]
-  # Builds the web client bundle
+  base = "apps/desktop"
   command = "npm run build"
-  publish = "apps/desktop/dist"
+  publish = "dist"
 
 [build.environment]
   NODE_VERSION = "20"
   VITE_BASE_PATH = "/"
   CI = "false"
   ELECTRON_SKIP_BINARY_DOWNLOAD = "1"
+  NPM_FLAGS = "--include=dev"
 
 # Proxy API requests directly to your Render backend
 [[redirects]]

@@ -1,0 +1,37 @@
+# ===================================================
+# Netlify Configuration for ZhanX DentalCare Desktop
+# (Active when Netlify Base directory is apps/desktop)
+# ===================================================
+
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+  VITE_BASE_PATH = "/"
+  CI = "false"
+  ELECTRON_SKIP_BINARY_DOWNLOAD = "1"
+  NPM_FLAGS = "--include=dev"
+
+# Proxy API requests directly to your Render backend
+[[redirects]]
+  from = "/api/*"
+  to = "https://dhms-73i8.onrender.com/api/:splat"
+  status = 200
+  force = false
+
+# Single Page Application (SPA) catch-all fallback
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Security and Performance Headers
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"

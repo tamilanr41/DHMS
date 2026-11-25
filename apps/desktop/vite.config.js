@@ -41,7 +41,16 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     emptyOutDir: true,
-    sourcemap: false
+    sourcemap: false,
+    chunkSizeWarningLimit: 2500,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom', 'react-router-dom', '@tanstack/react-query'],
+          ui: ['lucide-react', 'recharts']
+        }
+      }
+    }
   },
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version)

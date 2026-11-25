@@ -415,6 +415,7 @@ export default function DashboardPage() {
           value={stats.totalPatients || 0}
           subtitle={`+${stats.newPatients || 0} recent`}
           icon={Users}
+          image={heroTooth}
           variant="teal"
         />
         <DoccureKpiCard
@@ -422,6 +423,7 @@ export default function DashboardPage() {
           value={schedule.length}
           subtitle={`${morningList.length} am · ${afternoonList.length} pm`}
           icon={CalendarDays}
+          image={receivedTodayTooth}
           variant="amber"
         />
         <DoccureKpiCard
@@ -429,6 +431,7 @@ export default function DashboardPage() {
           value={queueList.filter((q) => q.status === 'in_consultation').length || 0}
           subtitle={`${stats.waiting || queueList.length} waiting`}
           icon={Stethoscope}
+          image={implantTooth}
           variant="purple"
           hasDot
         />
@@ -437,6 +440,7 @@ export default function DashboardPage() {
           value={canSeeFinancials ? formatMoney(stats.collected || 0) : '₹0.00'}
           subtitle={`due ${formatMoney(stats.outstanding || 0)}`}
           icon={Wallet}
+          image={revenueCoinsTooth}
           variant="emerald"
         />
       </div>

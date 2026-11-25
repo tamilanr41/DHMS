@@ -1,12 +1,5 @@
 -- 013_multi_tenant_clinic_scoping.sql
--- Multi-Tenant Clinic Isolation, Scoped Admin Credentials, and Purging Demo/Dummy Records
-
--- Temporarily drop delete prevention triggers for purge
-DROP TRIGGER IF EXISTS invoices_no_delete ON invoices;
-DROP TRIGGER IF EXISTS payments_no_delete ON payments;
-DROP TRIGGER IF EXISTS refunds_no_delete ON refunds;
-DROP TRIGGER IF EXISTS consultations_no_delete ON consultations;
-DROP TRIGGER IF EXISTS invoice_adjustments_no_delete ON invoice_adjustments;
+-- Multi-Tenant Clinic Isolation and Scoped Schema
 
 -- 1. Add clinic_id to users
 ALTER TABLE users ADD COLUMN IF NOT EXISTS clinic_id uuid REFERENCES clinic_tenants(id) ON DELETE CASCADE;
@@ -45,50 +38,3 @@ CREATE INDEX IF NOT EXISTS dental_lab_orders_clinic_idx ON dental_lab_orders (cl
 ALTER TABLE clinic_settings DROP CONSTRAINT IF EXISTS clinic_settings_id_check;
 ALTER TABLE clinic_settings ADD COLUMN IF NOT EXISTS clinic_id uuid REFERENCES clinic_tenants(id) ON DELETE CASCADE;
 CREATE INDEX IF NOT EXISTS clinic_settings_clinic_idx ON clinic_settings (clinic_id);
-
--- 9. Clean out all dummy / demo clinical records for a 100% fresh start
-TRUNCATE TABLE 
-  appointment_reminders,
-  appointment_status_history,
-  appointments,
-  consultation_notes,
-  consultations,
-  dental_chart_records,
-  periodontal_records,
-  treatment_plan_consents,
-  treatment_plan_items,
-  treatment_plans,
-  invoice_adjustments,
-  invoice_items,
-  refunds,
-  payments,
-  patient_credits,
-  patient_credit_applications,
-  patient_communications,
-  insurance_claims,
-  documents,
-  clinical_photos,
-  patients,
-  stock_movements,
-  inventory_items,
-  dental_lab_orders,
-  refresh_sessions
-CASCADE;
-
-DELETE FROM users WHERE username IN ('example', 'dr.arjun', 'priya.front', 'kavya.assist');
-
--- Recreate triggers
-CREATE TRIGGER invoices_no_delete BEFORE DELETE ON invoices
-FOR EACH ROW EXECUTE FUNCTION invoices_delete_draft_only();
-
-CREATE TRIGGER payments_no_delete BEFORE DELETE ON payments
-FOR EACH ROW EXECUTE FUNCTION financial_rows_immutable();
-
-CREATE TRIGGER refunds_no_delete BEFORE DELETE ON refunds
-FOR EACH ROW EXECUTE FUNCTION financial_rows_immutable();
-
-CREATE TRIGGER consultations_no_delete BEFORE DELETE ON consultations
-FOR EACH ROW EXECUTE FUNCTION financial_rows_immutable();
-
-CREATE TRIGGER invoice_adjustments_no_delete BEFORE DELETE ON invoice_adjustments
-FOR EACH ROW EXECUTE FUNCTION financial_rows_immutable();

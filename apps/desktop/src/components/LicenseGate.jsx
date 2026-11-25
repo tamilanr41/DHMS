@@ -43,11 +43,13 @@ export default function LicenseGate({ children }) {
     () => (typeof window !== 'undefined' ? localStorage.getItem('zhanx_my_clinic_code') : null)
   );
 
+  const safeClinicCode = typeof clinicCodeState === 'string' ? clinicCodeState : null;
+
   const deviceQuery = useQuery({
-    queryKey: ['tamilan-device-verify', deviceInfo?.fingerprint, clinicCodeState],
+    queryKey: ['tamilan-device-verify', deviceInfo?.fingerprint, safeClinicCode],
     queryFn: async () => {
       if (!deviceInfo?.fingerprint) return null;
-      const activeCode = (typeof window !== 'undefined' ? localStorage.getItem('zhanx_my_clinic_code') : null) || clinicCodeState;
+      const activeCode = (typeof window !== 'undefined' ? localStorage.getItem('zhanx_my_clinic_code') : null) || safeClinicCode;
       const res = await api.post('/tamilan/device/verify', {
         clinicCode: activeCode || undefined,
         deviceFingerprint: deviceInfo.fingerprint,
@@ -65,7 +67,7 @@ export default function LicenseGate({ children }) {
   const { data, isLoading, error, refetch, isFetching } = useLicenseStatus();
 
   const handleRetry = useCallback((newCode) => {
-    if (newCode) {
+    if (typeof newCode === 'string') {
       setClinicCodeState(newCode);
     }
     deviceQuery.refetch();

@@ -66,6 +66,34 @@ export async function getLicenseStatus() {
     productName: 'ZhanX DentalCare',
     support: { email: config.licensing.supportEmail, phone: config.licensing.supportPhone || null }
   };
+
+  // 1. Check if clinic is activated in Tamilan Cloud SaaS
+  try {
+    const { rows } = await query(
+      "SELECT * FROM clinic_tenants WHERE status = 'active' ORDER BY updated_at DESC LIMIT 1"
+    );
+    if (rows.length > 0) {
+      const activeClinic = rows[0];
+      return {
+        ...base,
+        activated: true,
+        deviceId: 'TAMILAN-CLOUD-SAAS',
+        deviceProtection: 'cloud-saas',
+        reason: null,
+        message: null,
+        license: {
+          licenseId: activeClinic.clinic_code,
+          clinicName: activeClinic.clinic_name,
+          tier: activeClinic.plan_name || 'Tamilan Pro Cloud',
+          validUntil: activeClinic.valid_until || '2099-12-31'
+        },
+        setupRequired: false
+      };
+    }
+  } catch {
+    // If table not present yet, fall back to file check below
+  }
+
   let device;
   try {
     device = await getDeviceIdentity();

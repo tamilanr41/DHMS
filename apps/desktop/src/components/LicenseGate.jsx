@@ -94,17 +94,19 @@ export default function LicenseGate({ children }) {
     );
   }
 
-  // Check Tamilan Cloud Seat Lock / Approval Status first
-  if (deviceQuery.data && !deviceQuery.data.allowed) {
+  // 1. Check Tamilan Cloud Seat Lock / Approval Status first
+  if (!deviceQuery.data || !deviceQuery.data.allowed) {
     return (
       <TamilanApprovalGate
-        verification={deviceQuery.data}
+        verification={deviceQuery.data || { allowed: false, reason: 'PENDING_APPROVAL' }}
         onRetry={() => deviceQuery.refetch()}
       />
     );
   }
 
-  if (!data?.activated) return <ActivationPage status={data} />;
-  if (data.setupRequired) return <SetupPage status={data} />;
+  // 2. Initial Setup if first time running
+  if (data?.setupRequired) return <SetupPage status={data} />;
+
+  // 3. Allowed & Licensed by Tamilan Cloud -> Render Clinic Management Software!
   return children;
 }

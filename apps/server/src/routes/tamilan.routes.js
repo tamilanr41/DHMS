@@ -85,8 +85,9 @@ router.post('/device/verify', async (req, res, next) => {
 
     let clinic = null;
 
-    if (clinicCode) {
-      const q = await query('SELECT * FROM clinic_tenants WHERE clinic_code = $1', [clinicCode]);
+    if (clinicCode && typeof clinicCode === 'string' && clinicCode.trim()) {
+      const cleanCode = clinicCode.trim();
+      const q = await query('SELECT * FROM clinic_tenants WHERE UPPER(clinic_code) = UPPER($1)', [cleanCode]);
       if (q.rows.length > 0) clinic = q.rows[0];
     } else {
       // Find if this specific computer/device fingerprint was already registered to any clinic
@@ -104,8 +105,10 @@ router.post('/device/verify', async (req, res, next) => {
     if (!clinic) {
       return res.json({
         allowed: false,
-        reason: 'REGISTER_REQUIRED',
-        message: 'No registered clinic found on this workstation. Please submit clinic registration.'
+        reason: clinicCode ? 'CLINIC_NOT_FOUND' : 'REGISTER_REQUIRED',
+        message: clinicCode
+          ? `Clinic code '${clinicCode.toUpperCase()}' does not exist. Please check your clinic code or register a new clinic.`
+          : 'No registered clinic found on this workstation. Please submit clinic registration.'
       });
     }
 

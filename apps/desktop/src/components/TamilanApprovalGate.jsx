@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Activity,
   ArrowRight,
@@ -18,7 +18,10 @@ import {
   ShieldCheck,
   Stethoscope,
   User,
-  Workflow
+  Workflow,
+  KeyRound,
+  Layers,
+  Sparkles
 } from 'lucide-react';
 import { api } from '../services/api.js';
 import { useToast } from './ui/Toast.jsx';
@@ -55,6 +58,9 @@ const HOSPITAL = {
 export default function TamilanApprovalGate({ verification, onRetry }) {
   const toast = useToast();
 
+  // Mode: 'register' (New clinic) or 'connect' (Existing clinic code for 2nd/3rd device)
+  const [viewMode, setViewMode] = useState('register');
+
   const [registerForm, setRegisterForm] = useState({
     clinicName: '',
     doctorName: '',
@@ -65,17 +71,40 @@ export default function TamilanApprovalGate({ verification, onRetry }) {
     requestedSystems: '1',
     requestedModules: ['appointments', 'chart', 'plans', 'prescriptions', 'billing']
   });
+
+  const [connectForm, setConnectForm] = useState({
+    clinicCode: '',
+    deviceName: ''
+  });
+
   const [registerBusy, setRegisterBusy] = useState(false);
+  const [connectBusy, setConnectBusy] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
   const [isChecking, setIsChecking] = useState(false);
   const [justRegisteredClinic, setJustRegisteredClinic] = useState(null);
+
+  // Prepopulate device name on mount
+  useEffect(() => {
+    try {
+      const meta = getClientDeviceInfo();
+      if (meta?.deviceName) {
+        setConnectForm((prev) => ({ ...prev, deviceName: meta.deviceName }));
+      }
+    } catch (e) {}
+  }, []);
 
   const savedCode = typeof window !== 'undefined' ? localStorage.getItem('zhanx_my_clinic_code') : null;
   const reason = verification?.reason || 'REGISTER_REQUIRED';
   const clinic = justRegisteredClinic || verification?.clinic || null;
 
-  // Determine whether to show Registration form or Verification In Progress
-  const isRegistered = Boolean(justRegisteredClinic) || (reason !== 'REGISTER_REQUIRED' && Boolean(clinic?.clinic_code || savedCode));
+  // Determine whether to show Initial forms (Register / Connect) or Status Screens
+  const isRegistered =
+    Boolean(justRegisteredClinic) ||
+    (reason !== 'REGISTER_REQUIRED' && reason !== 'CLINIC_NOT_FOUND' && Boolean(clinic?.clinic_code || savedCode));
+
+  const isSeatLimit = reason === 'MAX_SYSTEMS_REACHED';
+  const isSuspended = reason === 'SUSPENDED';
+  const isExpired = reason === 'EXPIRED';
 
   const handleManualCheck = async () => {
     setIsChecking(true);
@@ -86,6 +115,7 @@ export default function TamilanApprovalGate({ verification, onRetry }) {
     }
   };
 
+  // Submit New Clinic Registration
   const handleRegisterSubmit = async (e) => {
     e.preventDefault();
     if (!registerForm.clinicName || !registerForm.doctorName || !registerForm.mobile) {
@@ -123,6 +153,56 @@ export default function TamilanApprovalGate({ verification, onRetry }) {
     }
   };
 
+  // Connect Existing Clinic Device via Clinic Code
+  const handleConnectSubmit = async (e) => {
+    e.preventDefault();
+    const cleanCode = connectForm.clinicCode.trim().toUpperCase();
+    if (!cleanCode) {
+      toast.error('Please enter your clinic code.');
+      return;
+    }
+
+    setConnectBusy(true);
+    try {
+      const fingerprint = await getClientDeviceFingerprint();
+      const meta = getClientDeviceInfo();
+
+      const res = await api.post('/tamilan/device/verify', {
+        clinicCode: cleanCode,
+        deviceFingerprint: fingerprint,
+        deviceName: connectForm.deviceName.trim() || meta.deviceName || 'Secondary Workstation',
+        osPlatform: meta.osPlatform,
+        browserInfo: meta.browserInfo
+      });
+
+      const data = res?.data ?? res;
+
+      if (data.allowed) {
+        localStorage.setItem('zhanx_my_clinic_code', cleanCode);
+        toast.success(`Workstation connected! Welcome to ${data.clinic?.clinic_name || cleanCode}.`);
+        await onRetry?.(cleanCode);
+      } else if (data.reason === 'CLINIC_NOT_FOUND') {
+        toast.error(data.message || `Clinic code '${cleanCode}' was not found. Please verify the code.`);
+      } else if (data.reason === 'MAX_SYSTEMS_REACHED') {
+        localStorage.setItem('zhanx_my_clinic_code', cleanCode);
+        toast.error(`Workstation seat limit reached (${data.activeSystems}/${data.maxSystems} active)!`);
+        await onRetry?.(cleanCode);
+      } else if (data.reason === 'PENDING_APPROVAL') {
+        localStorage.setItem('zhanx_my_clinic_code', cleanCode);
+        toast.info('This practice is pending activation by the administrator.');
+        await onRetry?.(cleanCode);
+      } else {
+        localStorage.setItem('zhanx_my_clinic_code', cleanCode);
+        toast.error(data.message || 'Authorization failed.');
+        await onRetry?.(cleanCode);
+      }
+    } catch (err) {
+      toast.error(err.message || 'Failed to connect device. Please verify your connection.');
+    } finally {
+      setConnectBusy(false);
+    }
+  };
+
   const copyClinicCode = () => {
     if (!clinic?.clinic_code) return;
     navigator.clipboard.writeText(clinic.clinic_code);
@@ -131,9 +211,12 @@ export default function TamilanApprovalGate({ verification, onRetry }) {
     setTimeout(() => setCopiedCode(false), 2000);
   };
 
-  const isSeatLimit = reason === 'MAX_SYSTEMS_REACHED';
-  const isSuspended = reason === 'SUSPENDED';
-  const isExpired = reason === 'EXPIRED';
+  const handleResetOrSwitchClinic = () => {
+    localStorage.removeItem('zhanx_my_clinic_code');
+    setJustRegisteredClinic(null);
+    setViewMode('connect');
+    onRetry?.(null);
+  };
 
   return (
     <main className="relative flex min-h-screen min-h-[100dvh] overflow-y-auto bg-[#0b1220] text-white font-sans selection:bg-teal-500 selection:text-white">
@@ -145,7 +228,7 @@ export default function TamilanApprovalGate({ verification, onRetry }) {
         className="pointer-events-none fixed inset-0 h-full w-full object-cover"
       />
 
-      {/* Warm clinical overlays — deep evergreen with blue horizon */}
+      {/* Warm clinical overlays */}
       <div
         className="pointer-events-none fixed inset-0 bg-gradient-to-r from-[#0b1220]/95 via-[#0f172a]/80 to-[#0b1220]/50"
         aria-hidden="true"
@@ -201,7 +284,7 @@ export default function TamilanApprovalGate({ verification, onRetry }) {
               </span>
             </h1>
             <p className="mt-4 max-w-md text-[14.5px] leading-relaxed text-white/80">
-              Patient records, appointments, dental charts, billing, and clinical workflows in one
+              Patient records, appointments, dental charts, billing, and multi-chair workflows in one
               secure workspace for your practice team.
             </p>
           </div>
@@ -247,169 +330,311 @@ export default function TamilanApprovalGate({ verification, onRetry }) {
             </div>
           </div>
 
-          {/* Glassmorphic Form Card */}
+          {/* Glassmorphic Card */}
           <div className="relative rounded-2xl border border-white/20 bg-white/[0.08] backdrop-blur-2xl p-6 shadow-[0_24px_64px_-16px_rgba(0,0,0,0.7)] sm:p-8">
             {/* ================================================================ */}
-            {/* CASE A: UNREGISTERED -> REGISTER YOUR PRACTICE FORM               */}
+            {/* CASE A: UNREGISTERED -> REGISTER OR CONNECT DEVICE VIA CODE       */}
             {/* ================================================================ */}
             {!isRegistered && !isSeatLimit && (
               <div>
-                <div className="mb-5">
-                  <p className="mb-1.5 text-[11px] font-bold uppercase tracking-[0.18em] text-accent-300">
-                    New Clinic Setup
-                  </p>
-                  <h2 className="text-[26px] font-bold tracking-tight text-white">
-                    Register Your Dental Practice
-                  </h2>
-                  <p className="mt-1 text-[13px] text-white/70">
-                    Enter your clinic details to initialize your practice workspace
-                  </p>
+                {/* Segmented Mode Switcher */}
+                <div className="mb-5 flex rounded-xl border border-white/15 bg-white/[0.06] p-1 backdrop-blur-md">
+                  <button
+                    type="button"
+                    onClick={() => setViewMode('register')}
+                    className={`flex-1 flex items-center justify-center gap-2 rounded-lg py-2 text-xs font-bold transition cursor-pointer ${
+                      viewMode === 'register'
+                        ? 'bg-gradient-to-r from-accent-400 to-brand-400 text-white shadow-md'
+                        : 'text-white/70 hover:text-white'
+                    }`}
+                  >
+                    <Building2 size={14} />
+                    <span>Register New Clinic</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setViewMode('connect')}
+                    className={`flex-1 flex items-center justify-center gap-2 rounded-lg py-2 text-xs font-bold transition cursor-pointer ${
+                      viewMode === 'connect'
+                        ? 'bg-gradient-to-r from-accent-400 to-brand-400 text-white shadow-md'
+                        : 'text-white/70 hover:text-white'
+                    }`}
+                  >
+                    <Laptop size={14} />
+                    <span>Connect With Clinic Code</span>
+                  </button>
                 </div>
 
-                <form onSubmit={handleRegisterSubmit} className="space-y-3.5 text-left text-xs" noValidate>
-                  {/* Clinic Name */}
+                {/* ── SUB-VIEW 1: REGISTER NEW CLINIC ───────────────────────────── */}
+                {viewMode === 'register' && (
                   <div>
-                    <label className="mb-1 block text-[12px] font-semibold text-white/85">
-                      Clinic Name *
-                    </label>
-                    <div className="flex items-center rounded-xl border border-white/20 bg-white/[0.06] backdrop-blur-md transition-all duration-200 focus-within:border-accent-300 focus-within:bg-white/[0.12]">
-                      <Building2 className="ml-3.5 h-[17px] w-[17px] shrink-0 text-white/50" strokeWidth={1.8} />
-                      <input
-                        required
-                        value={registerForm.clinicName}
-                        onChange={(e) => setRegisterForm({ ...registerForm, clinicName: e.target.value })}
-                        placeholder="e.g. Apex Multispeciality Dental Hospital"
-                        className="w-full flex-1 border-0 bg-transparent px-2.5 py-2.5 text-[13.5px] text-white placeholder:text-white/40 outline-none focus:ring-0 shadow-none"
-                      />
+                    <div className="mb-5">
+                      <p className="mb-1.5 text-[11px] font-bold uppercase tracking-[0.18em] text-accent-300">
+                        New Practice Setup
+                      </p>
+                      <h2 className="text-[25px] font-bold tracking-tight text-white">
+                        Register Your Dental Practice
+                      </h2>
+                      <p className="mt-1 text-[13px] text-white/70">
+                        Initialize your main clinic account to request access and obtain your Clinic Code
+                      </p>
                     </div>
-                  </div>
 
-                  {/* Doctor & Mobile */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="mb-1 block text-[12px] font-semibold text-white/85">
-                        Chief Doctor Name *
-                      </label>
-                      <div className="flex items-center rounded-xl border border-white/20 bg-white/[0.06] backdrop-blur-md transition-all duration-200 focus-within:border-accent-300 focus-within:bg-white/[0.12]">
-                        <User className="ml-3.5 h-[17px] w-[17px] shrink-0 text-white/50" strokeWidth={1.8} />
-                        <input
-                          required
-                          value={registerForm.doctorName}
-                          onChange={(e) => setRegisterForm({ ...registerForm, doctorName: e.target.value })}
-                          placeholder="Dr. Rajesh MDS"
-                          className="w-full flex-1 border-0 bg-transparent px-2.5 py-2.5 text-[13.5px] text-white placeholder:text-white/40 outline-none focus:ring-0 shadow-none"
-                        />
+                    <form onSubmit={handleRegisterSubmit} className="space-y-3.5 text-left text-xs" noValidate>
+                      {/* Clinic Name */}
+                      <div>
+                        <label className="mb-1 block text-[12px] font-semibold text-white/85">
+                          Clinic Name *
+                        </label>
+                        <div className="flex items-center rounded-xl border border-white/20 bg-white/[0.06] backdrop-blur-md transition-all duration-200 focus-within:border-accent-300 focus-within:bg-white/[0.12]">
+                          <Building2 className="ml-3.5 h-[17px] w-[17px] shrink-0 text-white/50" strokeWidth={1.8} />
+                          <input
+                            required
+                            value={registerForm.clinicName}
+                            onChange={(e) => setRegisterForm({ ...registerForm, clinicName: e.target.value })}
+                            placeholder="e.g. Apex Multispeciality Dental Hospital"
+                            className="w-full flex-1 border-0 bg-transparent px-2.5 py-2.5 text-[13.5px] text-white placeholder:text-white/40 outline-none focus:ring-0 shadow-none"
+                          />
+                        </div>
                       </div>
-                    </div>
 
-                    <div>
-                      <label className="mb-1 block text-[12px] font-semibold text-white/85">
-                        Mobile Number *
-                      </label>
-                      <div className="flex items-center rounded-xl border border-white/20 bg-white/[0.06] backdrop-blur-md transition-all duration-200 focus-within:border-accent-300 focus-within:bg-white/[0.12]">
-                        <Phone className="ml-3.5 h-[17px] w-[17px] shrink-0 text-white/50" strokeWidth={1.8} />
-                        <input
-                          required
-                          value={registerForm.mobile}
-                          onChange={(e) => setRegisterForm({ ...registerForm, mobile: e.target.value })}
-                          placeholder="9876543210"
-                          className="w-full flex-1 border-0 bg-transparent px-2.5 py-2.5 text-[13.5px] text-white placeholder:text-white/40 outline-none focus:ring-0 shadow-none"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* City & Workstations */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="mb-1 block text-[12px] font-semibold text-white/85">
-                        City / District
-                      </label>
-                      <div className="flex items-center rounded-xl border border-white/20 bg-white/[0.06] backdrop-blur-md transition-all duration-200 focus-within:border-accent-300 focus-within:bg-white/[0.12]">
-                        <MapPin className="ml-3.5 h-[17px] w-[17px] shrink-0 text-white/50" strokeWidth={1.8} />
-                        <input
-                          value={registerForm.city}
-                          onChange={(e) => setRegisterForm({ ...registerForm, city: e.target.value })}
-                          placeholder="e.g. Chennai, Madurai"
-                          className="w-full flex-1 border-0 bg-transparent px-2.5 py-2.5 text-[13.5px] text-white placeholder:text-white/40 outline-none focus:ring-0 shadow-none"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="mb-1 block text-[12px] font-semibold text-white/85">
-                        Computer Workstations
-                      </label>
-                      <div className="flex items-center rounded-xl border border-white/20 bg-white/[0.06] backdrop-blur-md transition-all duration-200 focus-within:border-accent-300 focus-within:bg-white/[0.12]">
-                        <Laptop className="ml-3.5 h-[17px] w-[17px] shrink-0 text-white/50" strokeWidth={1.8} />
-                        <select
-                          value={registerForm.requestedSystems}
-                          onChange={(e) => setRegisterForm({ ...registerForm, requestedSystems: e.target.value })}
-                          className="w-full flex-1 border-0 bg-transparent px-2.5 py-2.5 text-[13px] font-semibold text-accent-300 outline-none cursor-pointer [&>option]:bg-slate-900 [&>option]:text-white"
-                        >
-                          <option value="1">1 Computer (Single Seat Lock)</option>
-                          <option value="2">2 Computers (Reception + Operatory)</option>
-                          <option value="3">3 Computers (Reception + 2 Operatories)</option>
-                          <option value="5">5 Computers (Hospital Setup)</option>
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Clinical Modules */}
-                  <div>
-                    <label className="mb-1.5 block text-[12px] font-semibold text-white/85">
-                      Required Clinical Modules
-                    </label>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-36 overflow-y-auto pr-1">
-                      {MODULE_OPTIONS.map((m) => {
-                        const checked = registerForm.requestedModules.includes(m.id);
-                        return (
-                          <label
-                            key={m.id}
-                            className={`flex items-start gap-2 rounded-xl border p-2 cursor-pointer transition ${
-                              checked
-                                ? 'border-accent-400/50 bg-white/[0.12] text-white'
-                                : 'border-white/10 bg-white/[0.04] text-white/60 hover:border-white/20'
-                            }`}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              onChange={(e) => {
-                                const next = e.target.checked
-                                  ? [...registerForm.requestedModules, m.id]
-                                  : registerForm.requestedModules.filter((id) => id !== m.id);
-                                setRegisterForm({ ...registerForm, requestedModules: next });
-                              }}
-                              className="mt-0.5 rounded text-accent-400 focus:ring-0"
-                            />
-                            <div className="flex-1 min-w-0">
-                              <div className="font-semibold text-[11px] truncate">{m.label}</div>
-                              <div className="text-[10px] text-white/50 truncate">{m.desc}</div>
-                            </div>
+                      {/* Doctor & Mobile */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="mb-1 block text-[12px] font-semibold text-white/85">
+                            Chief Doctor Name *
                           </label>
-                        );
-                      })}
+                          <div className="flex items-center rounded-xl border border-white/20 bg-white/[0.06] backdrop-blur-md transition-all duration-200 focus-within:border-accent-300 focus-within:bg-white/[0.12]">
+                            <User className="ml-3.5 h-[17px] w-[17px] shrink-0 text-white/50" strokeWidth={1.8} />
+                            <input
+                              required
+                              value={registerForm.doctorName}
+                              onChange={(e) => setRegisterForm({ ...registerForm, doctorName: e.target.value })}
+                              placeholder="Dr. Rajesh MDS"
+                              className="w-full flex-1 border-0 bg-transparent px-2.5 py-2.5 text-[13.5px] text-white placeholder:text-white/40 outline-none focus:ring-0 shadow-none"
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="mb-1 block text-[12px] font-semibold text-white/85">
+                            Mobile Number *
+                          </label>
+                          <div className="flex items-center rounded-xl border border-white/20 bg-white/[0.06] backdrop-blur-md transition-all duration-200 focus-within:border-accent-300 focus-within:bg-white/[0.12]">
+                            <Phone className="ml-3.5 h-[17px] w-[17px] shrink-0 text-white/50" strokeWidth={1.8} />
+                            <input
+                              required
+                              value={registerForm.mobile}
+                              onChange={(e) => setRegisterForm({ ...registerForm, mobile: e.target.value })}
+                              placeholder="9876543210"
+                              className="w-full flex-1 border-0 bg-transparent px-2.5 py-2.5 text-[13.5px] text-white placeholder:text-white/40 outline-none focus:ring-0 shadow-none"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* City & Address */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="mb-1 block text-[12px] font-semibold text-white/85">
+                            City / District
+                          </label>
+                          <div className="flex items-center rounded-xl border border-white/20 bg-white/[0.06] backdrop-blur-md transition-all duration-200 focus-within:border-accent-300 focus-within:bg-white/[0.12]">
+                            <MapPin className="ml-3.5 h-[17px] w-[17px] shrink-0 text-white/50" strokeWidth={1.8} />
+                            <input
+                              value={registerForm.city}
+                              onChange={(e) => setRegisterForm({ ...registerForm, city: e.target.value })}
+                              placeholder="Chennai / Madurai"
+                              className="w-full flex-1 border-0 bg-transparent px-2.5 py-2.5 text-[13.5px] text-white placeholder:text-white/40 outline-none focus:ring-0 shadow-none"
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="mb-1 block text-[12px] font-semibold text-white/85">
+                            Workstations Needed
+                          </label>
+                          <select
+                            value={registerForm.requestedSystems}
+                            onChange={(e) => setRegisterForm({ ...registerForm, requestedSystems: e.target.value })}
+                            className="w-full rounded-xl border border-white/20 bg-white/[0.06] px-3 py-2.5 text-[13px] text-white backdrop-blur-md outline-none focus:border-accent-300"
+                          >
+                            <option value="1" className="bg-slate-900 text-white">1 Workstation (Doctor Chair)</option>
+                            <option value="2" className="bg-slate-900 text-white">2 Workstations (Chair + Reception)</option>
+                            <option value="3" className="bg-slate-900 text-white">3 Workstations (2 Chairs + Reception)</option>
+                            <option value="5" className="bg-slate-900 text-white">5 Workstations (Multi-chair Hospital)</option>
+                            <option value="10" className="bg-slate-900 text-white">10 Workstations (Enterprise)</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Modules Checklist */}
+                      <div>
+                        <label className="mb-1 block text-[12px] font-semibold text-white/85">
+                          Requested Modules
+                        </label>
+                        <div className="grid grid-cols-2 gap-2 max-h-32 overflow-y-auto rounded-xl border border-white/15 bg-white/[0.04] p-2.5 backdrop-blur-sm">
+                          {MODULE_OPTIONS.map((m) => {
+                            const checked = registerForm.requestedModules.includes(m.id);
+                            return (
+                              <label
+                                key={m.id}
+                                className={`flex items-start gap-2 p-1.5 rounded-lg border transition cursor-pointer ${
+                                  checked
+                                    ? 'bg-accent-500/15 border-accent-400/40 text-white'
+                                    : 'border-transparent text-white/60 hover:text-white'
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={(e) => {
+                                    const next = e.target.checked
+                                      ? [...registerForm.requestedModules, m.id]
+                                      : registerForm.requestedModules.filter((id) => id !== m.id);
+                                    setRegisterForm({ ...registerForm, requestedModules: next });
+                                  }}
+                                  className="mt-0.5 rounded text-accent-400 focus:ring-0"
+                                />
+                                <div className="flex-1 min-w-0">
+                                  <div className="font-semibold text-[11px] truncate">{m.label}</div>
+                                  <div className="text-[10px] text-white/50 truncate">{m.desc}</div>
+                                </div>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <div className="pt-2">
+                        <button
+                          type="submit"
+                          disabled={registerBusy}
+                          className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-accent-400 via-brand-400 to-accent-500 py-3.5 text-sm font-semibold text-white shadow-[0_12px_28px_-6px_rgba(20,184,200,0.45)] hover:shadow-[0_16px_36px_-6px_rgba(20,184,200,0.6)] transition active:scale-[0.98] cursor-pointer disabled:opacity-50"
+                        >
+                          <CheckCircle2 size={16} />
+                          {registerBusy ? 'Registering Clinic...' : 'Register Practice & Request Access'}
+                        </button>
+                      </div>
+                    </form>
+
+                    {/* Bottom Link to Connect Device */}
+                    <div className="mt-5 pt-4 border-t border-white/10 text-center">
+                      <p className="text-[11.5px] text-white/65 mb-2">
+                        Already registered your clinic? Adding Chair 2, Reception desk, or a mobile tablet?
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setViewMode('connect')}
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-accent-300/40 bg-accent-400/10 hover:bg-accent-400/20 px-3.5 py-1.5 text-xs font-bold text-accent-300 transition cursor-pointer"
+                      >
+                        <Laptop size={14} />
+                        <span>Enter Clinic Code to Connect This Device</span>
+                        <ArrowRight size={13} />
+                      </button>
                     </div>
                   </div>
+                )}
 
-                  <div className="pt-2">
-                    <button
-                      type="submit"
-                      disabled={registerBusy}
-                      className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-accent-400 via-brand-400 to-accent-500 py-3.5 text-sm font-semibold text-white shadow-[0_12px_28px_-6px_rgba(20,184,200,0.45)] hover:shadow-[0_16px_36px_-6px_rgba(20,184,200,0.6)] transition active:scale-[0.98] cursor-pointer disabled:opacity-50"
-                    >
-                      <CheckCircle2 size={16} />
-                      {registerBusy ? 'Registering Clinic...' : 'Register Practice & Request Access'}
-                    </button>
+                {/* ── SUB-VIEW 2: CONNECT EXISTING CLINIC CODE ───────────────────── */}
+                {viewMode === 'connect' && (
+                  <div>
+                    <div className="mb-5">
+                      <p className="mb-1.5 text-[11px] font-bold uppercase tracking-[0.18em] text-accent-300">
+                        Multi-Device Authorization
+                      </p>
+                      <h2 className="text-[25px] font-bold tracking-tight text-white">
+                        Connect Workstation to Practice
+                      </h2>
+                      <p className="mt-1 text-[13px] text-white/70">
+                        Enter your existing Clinic Code to link this computer or mobile device to your clinic license
+                      </p>
+                    </div>
+
+                    <form onSubmit={handleConnectSubmit} className="space-y-4 text-left text-xs" noValidate>
+                      {/* Clinic Code */}
+                      <div>
+                        <label className="mb-1 block text-[12px] font-semibold text-white/85">
+                          Practice Clinic Code *
+                        </label>
+                        <div className="flex items-center rounded-xl border border-white/20 bg-white/[0.06] backdrop-blur-md transition-all duration-200 focus-within:border-accent-300 focus-within:bg-white/[0.12]">
+                          <KeyRound className="ml-3.5 h-[17px] w-[17px] shrink-0 text-white/50" strokeWidth={1.8} />
+                          <input
+                            required
+                            autoFocus
+                            value={connectForm.clinicCode}
+                            onChange={(e) =>
+                              setConnectForm({ ...connectForm, clinicCode: e.target.value.toUpperCase() })
+                            }
+                            placeholder="e.g. CLI-839201"
+                            className="w-full flex-1 border-0 bg-transparent px-3 py-3 font-mono text-[15px] font-bold tracking-widest text-white placeholder:text-white/35 outline-none focus:ring-0 shadow-none uppercase"
+                          />
+                        </div>
+                        <p className="mt-1.5 text-[11px] text-white/50">
+                          The unique code issued to your clinic during initial registration (e.g. CLI-XXXXXX).
+                        </p>
+                      </div>
+
+                      {/* Station / Device Identifier */}
+                      <div>
+                        <label className="mb-1 block text-[12px] font-semibold text-white/85">
+                          Workstation / Device Identifier (Optional)
+                        </label>
+                        <div className="flex items-center rounded-xl border border-white/20 bg-white/[0.06] backdrop-blur-md transition-all duration-200 focus-within:border-accent-300 focus-within:bg-white/[0.12]">
+                          <Laptop className="ml-3.5 h-[17px] w-[17px] shrink-0 text-white/50" strokeWidth={1.8} />
+                          <input
+                            value={connectForm.deviceName}
+                            onChange={(e) => setConnectForm({ ...connectForm, deviceName: e.target.value })}
+                            placeholder="e.g. Doctor Chair 2 or Reception Desk"
+                            className="w-full flex-1 border-0 bg-transparent px-2.5 py-2.5 text-[13.5px] text-white placeholder:text-white/40 outline-none focus:ring-0 shadow-none"
+                          />
+                        </div>
+                        <p className="mt-1 text-[10.5px] text-white/50">
+                          Helps identify this computer in your clinic's device manager.
+                        </p>
+                      </div>
+
+                      {/* License seat reminder badge */}
+                      <div className="rounded-xl border border-cyan-400/20 bg-cyan-500/10 p-3 text-cyan-200 flex items-start gap-2.5">
+                        <ShieldCheck size={18} className="shrink-0 text-cyan-300 mt-0.5" />
+                        <div className="text-[11.5px] leading-relaxed">
+                          <strong className="text-white">Seat Availability:</strong> If your clinic license includes 2 or more workstations (e.g. Chair 1 + Reception), this device will be automatically authorized and bound to your clinic workspace.
+                        </div>
+                      </div>
+
+                      <div className="pt-2">
+                        <button
+                          type="submit"
+                          disabled={connectBusy}
+                          className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-accent-400 via-brand-400 to-accent-500 py-3.5 text-sm font-semibold text-white shadow-[0_12px_28px_-6px_rgba(20,184,200,0.45)] hover:shadow-[0_16px_36px_-6px_rgba(20,184,200,0.6)] transition active:scale-[0.98] cursor-pointer disabled:opacity-50"
+                        >
+                          <CheckCircle2 size={16} />
+                          {connectBusy ? 'Authorizing Workstation...' : 'Authorize & Connect Workstation'}
+                        </button>
+                      </div>
+                    </form>
+
+                    {/* Bottom Link to Register */}
+                    <div className="mt-5 pt-4 border-t border-white/10 text-center">
+                      <p className="text-[11.5px] text-white/65 mb-2">
+                        Don't have a registered clinic yet?
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setViewMode('register')}
+                        className="inline-flex items-center gap-1.5 text-xs font-bold text-accent-300 hover:text-white transition cursor-pointer"
+                      >
+                        <Building2 size={13} />
+                        <span>Register a New Dental Practice Instead →</span>
+                      </button>
+                    </div>
                   </div>
-                </form>
+                )}
               </div>
             )}
 
             {/* ================================================================ */}
-            {/* CASE B: REGISTERED -> ACCOUNT VERIFICATION IN PROGRESS             */}
+            {/* CASE B: REGISTERED -> ACCOUNT VERIFICATION OR SEAT LIMIT GATE    */}
             {/* ================================================================ */}
             {(isRegistered || isSeatLimit) && (
               <div className="text-center space-y-4">
@@ -438,7 +663,7 @@ export default function TamilanApprovalGate({ verification, onRetry }) {
                   </h2>
                   <p className="mx-auto max-w-sm text-[13px] leading-relaxed text-white/70">
                     {isSeatLimit
-                      ? `This clinic license is provisioned for ${clinic?.max_systems || verification?.maxSystems || 1} workstation(s). Contact your administrator to add additional seat licenses.`
+                      ? `This clinic license is provisioned for ${clinic?.max_systems || verification?.maxSystems || 1} workstation(s) (currently ${verification?.activeSystems || clinic?.max_systems || 1} active). Contact your administrator to add additional seat licenses.`
                       : isSuspended
                       ? 'Your clinic workspace is temporarily paused. Contact your administrator to restore access.'
                       : 'Your clinic registration has been submitted to the administrator. Access will unlock automatically once your practice is approved.'}
@@ -492,9 +717,11 @@ export default function TamilanApprovalGate({ verification, onRetry }) {
                       </div>
                       <div>
                         <span className="text-white/50 block text-[10.5px]">Approval State</span>
-                        <span className="font-semibold text-amber-300/90 flex items-center gap-1">
-                          <Activity size={12} className="text-amber-400" />
-                          Pending Review
+                        <span className={`font-semibold flex items-center gap-1 ${
+                          clinic.status === 'active' ? 'text-emerald-300' : 'text-amber-300/90'
+                        }`}>
+                          <Activity size={12} className={clinic.status === 'active' ? 'text-emerald-400' : 'text-amber-400'} />
+                          {clinic.status === 'active' ? 'Active License' : 'Pending Review'}
                         </span>
                       </div>
                     </div>
@@ -502,7 +729,7 @@ export default function TamilanApprovalGate({ verification, onRetry }) {
                 )}
 
                 {/* Actions */}
-                <div className="pt-2 flex flex-col sm:flex-row gap-3">
+                <div className="pt-2 flex flex-col sm:flex-row gap-2.5">
                   <button
                     type="button"
                     onClick={handleManualCheck}
@@ -510,20 +737,17 @@ export default function TamilanApprovalGate({ verification, onRetry }) {
                     className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-accent-400 via-brand-400 to-accent-500 py-3 text-sm font-semibold text-white shadow-[0_12px_28px_-6px_rgba(20,184,200,0.45)] hover:shadow-[0_16px_36px_-6px_rgba(20,184,200,0.6)] transition active:scale-[0.98] cursor-pointer disabled:opacity-75"
                   >
                     <RefreshCw size={14} className={isChecking ? 'animate-spin' : ''} />
-                    {isChecking ? 'Verifying Authorization…' : 'Check Verification Status'}
+                    {isChecking ? 'Checking Authorization…' : 'Check Authorization Status'}
                   </button>
 
                   <button
                     type="button"
-                    onClick={() => {
-                      localStorage.removeItem('zhanx_my_clinic_code');
-                      setJustRegisteredClinic(null);
-                      window.location.reload();
-                    }}
-                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/[0.06] hover:bg-white/[0.12] hover:border-white/30 px-4 py-3 text-xs font-semibold text-white transition active:scale-[0.98] cursor-pointer"
+                    onClick={handleResetOrSwitchClinic}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/[0.06] hover:bg-white/[0.12] hover:border-white/30 px-3.5 py-3 text-xs font-semibold text-white transition active:scale-[0.98] cursor-pointer"
+                    title="Connect with another Clinic Code or Register new"
                   >
-                    <Plus size={14} />
-                    Register New
+                    <Laptop size={14} />
+                    Switch Clinic Code
                   </button>
                 </div>
               </div>

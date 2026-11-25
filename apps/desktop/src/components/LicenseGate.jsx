@@ -69,6 +69,8 @@ export default function LicenseGate({ children }) {
   const handleRetry = useCallback((newCode) => {
     if (typeof newCode === 'string') {
       setClinicCodeState(newCode);
+    } else if (newCode === null) {
+      setClinicCodeState(null);
     }
     deviceQuery.refetch();
     refetch();

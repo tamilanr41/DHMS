@@ -17,8 +17,11 @@
 
   body {
     @apply bg-canvas text-ink antialiased;
+    font-family: 'Plus Jakarta Sans', 'InterVariable', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
     font-variant-numeric: tabular-nums;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   ::selection {

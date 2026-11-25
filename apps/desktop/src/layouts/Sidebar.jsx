@@ -172,11 +172,10 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onCloseMobile
                         )}
                         {(!collapsed || mobileOpen) && item.badge && (
                           <span
-                            className={`rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide ${
-                              isActive
-                                ? 'bg-white/20 text-white'
-                                : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
-                            }`}
+                            className={`rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide ${isActive
+                              ? 'bg-white/20 text-white'
+                              : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                              }`}
                           >
                             {item.badge}
                           </span>

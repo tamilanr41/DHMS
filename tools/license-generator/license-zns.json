@@ -1,0 +1,18 @@
+{
+  "format": "zhanx-license/1",
+  "payload": {
+    "licenseId": "LIC-20261123-371ADC",
+    "productId": "zhanx-dentalcare",
+    "licenseVersion": 1,
+    "deviceId": "ZXDC-30F0-572E-A7A1",
+    "clinicName": "ZNS",
+    "dentistName": "Dr. Sathish",
+    "licenseType": "perpetual",
+    "issuedAt": "2026-11-23T07:17:34.012Z",
+    "expiresAt": null,
+    "features": [
+      "*"
+    ]
+  },
+  "signature": "UkaV7jD/vHF8Y7lU+RmxsA9wCkYOKdkTClQVnvyLZgb1IPFPAy987CDUIUWrbF2uQ4KbGsQ23Bjc+ASiVqyxCw=="
+}

@@ -1,0 +1,36 @@
+# ===================================================
+# Netlify Configuration for ZhanX DentalCare Frontend
+# ===================================================
+
+[build]
+  # Builds the web client bundle
+  command = "npm --workspace apps/desktop run build"
+  publish = "apps/desktop/dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+  VITE_BASE_PATH = "/"
+
+# Proxy API requests directly to your Render backend
+# (Replace with your actual Render service URL, e.g. https://zhanx-dentalcare-server.onrender.com)
+[[redirects]]
+  from = "/api/*"
+  to = "https://zhanx-dentalcare-server.onrender.com/api/:splat"
+  status = 200
+  force = false
+
+# Single Page Application (SPA) catch-all fallback
+# Routes like /tamilan, /consultations, /billing will load index.html without 404
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Security and Performance Headers
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"

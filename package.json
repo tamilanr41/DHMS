@@ -1,0 +1,36 @@
+{
+  "name": "zhanx-dentalcare",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ZhanX DentalCare - Dental Clinic Management System",
+  "workspaces": [
+    "apps/server",
+    "apps/desktop"
+  ],
+  "scripts": {
+    "dev:server": "npm --workspace apps/server run dev",
+    "dev:vite": "npm --workspace apps/desktop run dev:vite",
+    "dev:electron": "npm --workspace apps/desktop run dev:electron",
+    "dev": "concurrently -k -n api,vite,electron -c blue,green,magenta \"npm run dev:server\" \"npm run dev:vite\" \"wait-on tcp:127.0.0.1:5173 && npm run dev:electron\"",
+    "tunnel": "npx --yes localtunnel --port 5173 --subdomain zhanx-dentalcare-clinic",
+    "share": "concurrently -k -n app,tunnel -c blue,yellow \"npm run dev\" \"wait-on tcp:127.0.0.1:5173 && npm run tunnel\"",
+    "migrate": "npm --workspace apps/server run migrate",
+    "seed": "npm --workspace apps/server run seed",
+    "start:server": "npm --workspace apps/server run start",
+    "test": "npm --workspace apps/server run test",
+    "build:desktop": "npm --workspace apps/desktop run build",
+    "dist:client": "npm --workspace apps/desktop run dist",
+    "dist:server": "powershell -ExecutionPolicy Bypass -File scripts/build-server-package.ps1"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "wait-on": "^8.0.2"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "allowScripts": {
+    "electron@33.4.11": true,
+    "esbuild@0.25.12": true
+  }
+}

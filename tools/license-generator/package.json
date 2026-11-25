@@ -1,0 +1,6 @@
+{
+  "name": "zhanx-license-generator",
+  "private": true,
+  "type": "module",
+  "description": "Private ZhanX Studio license signing utility — never distribute with the clinic app"
+}

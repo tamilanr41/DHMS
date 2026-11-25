@@ -1,0 +1,43 @@
+# ===================================================
+# Render Blueprint for ZhanX DentalCare API & Database
+# ===================================================
+
+services:
+  # -------------------------------------------------
+  # 1. Web Service: ZhanX DentalCare Express API
+  # -------------------------------------------------
+  - type: web
+    name: zhanx-dentalcare-server
+    runtime: node
+    plan: free
+    region: singapore # Closest region to India / Tamil Nadu for lowest latency
+    buildCommand: npm install
+    startCommand: node apps/server/src/database/migrate.js && node apps/server/src/server.js
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 4000
+      - key: HOST
+        value: 0.0.0.0
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CORS_ORIGINS
+        value: "*"
+      # Connect automatically to the attached free PostgreSQL database below
+      # (Or you can replace this with a Neon.tech connection URL!)
+      - key: DATABASE_URL
+        fromDatabase:
+          name: zhanx-dental-db
+          property: connectionString
+
+# -------------------------------------------------
+# 2. Free Managed PostgreSQL Database on Render
+# -------------------------------------------------
+databases:
+  - name: zhanx-dental-db
+    plan: free
+    region: singapore
+    databaseName: zhanx_dentalcare
+    user: zhanx_admin

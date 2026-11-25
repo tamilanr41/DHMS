@@ -36,6 +36,7 @@ export default function TamilanApprovalGate({ verification, onRetry }) {
   const [registerBusy, setRegisterBusy] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
   const [isChecking, setIsChecking] = useState(false);
+  const [justRegisteredClinic, setJustRegisteredClinic] = useState(null);
 
   const savedCode = typeof window !== 'undefined' ? localStorage.getItem('zhanx_my_clinic_code') : null;
   const reason = verification?.reason || 'REGISTER_REQUIRED';

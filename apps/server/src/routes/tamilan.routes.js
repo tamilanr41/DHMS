@@ -91,7 +91,7 @@ router.post('/device/verify', async (req, res, next) => {
         `SELECT c.* FROM clinic_tenants c
          JOIN clinic_devices d ON d.clinic_id = c.id
          WHERE d.device_fingerprint = $1
-         ORDER BY d.created_at DESC LIMIT 1`,
+         ORDER BY d.first_seen_at DESC LIMIT 1`,
         [deviceFingerprint]
       );
       if (devQ.rows.length > 0) clinic = devQ.rows[0];

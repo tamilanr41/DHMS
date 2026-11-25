@@ -50,7 +50,7 @@ export default function AppLayout({ children }) {
   }, [mobileOpen]);
 
   return (
-    <div className="relative min-h-screen bg-slate-50/70 font-sans text-slate-800 transition-colors dark:bg-slate-950 dark:text-slate-100">
+    <div className="relative min-h-screen max-w-[100vw] overflow-x-hidden bg-slate-50/70 font-sans text-slate-800 transition-colors dark:bg-slate-950 dark:text-slate-100">
       {/* Background ambient dental glows */}
       <div
         aria-hidden="true"

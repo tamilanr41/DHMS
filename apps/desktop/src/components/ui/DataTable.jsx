@@ -113,9 +113,9 @@ export default function DataTable({
 
 export function TableToolbar({ search, onSearchChange, placeholder = 'Search…', children }) {
   return (
-    <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-3">
+    <div className="flex flex-wrap items-center justify-between gap-2.5 border-b border-line px-3.5 py-3 sm:px-4">
       {onSearchChange && (
-        <div className="relative min-w-[220px] max-w-sm flex-1">
+        <div className="relative min-w-0 w-full sm:w-auto sm:min-w-[220px] max-w-sm flex-1">
           <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             value={search}
@@ -126,7 +126,7 @@ export function TableToolbar({ search, onSearchChange, placeholder = 'Search…'
           />
         </div>
       )}
-      <div className="ml-auto flex flex-wrap items-center gap-2">{children}</div>
+      <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto sm:ml-auto">{children}</div>
     </div>
   );
 }

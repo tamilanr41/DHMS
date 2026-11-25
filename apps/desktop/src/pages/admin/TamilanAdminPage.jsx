@@ -506,7 +506,7 @@ export default function TamilanAdminPage() {
           <>
             {/* Filter and Search Bar */}
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="relative flex-1 min-w-[260px] max-w-md">
+              <div className="relative flex-1 min-w-0 w-full sm:w-auto sm:min-w-[260px] max-w-md">
                 <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
                   type="text"

@@ -648,7 +648,7 @@ export default function AppointmentsPage() {
 
         {/* Filters Strip */}
         <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-3 dark:border-slate-800">
-          <div className="relative min-w-[200px] max-w-[280px] flex-1">
+          <div className="relative min-w-0 w-full sm:w-auto sm:min-w-[200px] max-w-[280px] flex-1">
             <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               value={search}

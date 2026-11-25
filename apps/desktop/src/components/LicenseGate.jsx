@@ -1,11 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Activity, RefreshCw, ServerOff } from 'lucide-react';
 import { api } from '../services/api.js';
 import { useLicenseStatus } from '../hooks/useLicenseStatus.js';
 import { getClientDeviceFingerprint, getClientDeviceInfo } from '../services/deviceFingerprint.js';
-import ActivationPage from '../pages/auth/ActivationPage.jsx';
 import SetupPage from '../pages/auth/SetupPage.jsx';
 import TamilanApprovalGate from './TamilanApprovalGate.jsx';
 import Button from './ui/Button.jsx';
@@ -60,20 +59,30 @@ export default function LicenseGate({ children }) {
   // 2. Local fallback license status
   const { data, isLoading, error, refetch, isFetching } = useLicenseStatus();
 
-  if (isLoading || (deviceInfo && deviceQuery.isLoading)) {
+  const handleRetry = useCallback(() => {
+    deviceQuery.refetch();
+    refetch();
+  }, [deviceQuery, refetch]);
+
+  // Only show full-screen loader on initial mount before any data arrives
+  const isInitialLoading =
+    (isLoading && !data) ||
+    (Boolean(deviceInfo) && deviceQuery.isLoading && !deviceQuery.data);
+
+  if (isInitialLoading) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#050b14]/90 backdrop-blur-xl">
         <ZhaWaterLoader
           progress={50}
           autoAnimate
-          statusText="Checking Tamilan cloud license & authorized system…"
+          statusText="Checking clinic workstation authorization…"
           tamilStatusText="கணினி மற்றும் உரிமம் சரிபார்க்கப்படுகிறது…"
         />
       </div>
     );
   }
 
-  if (error) {
+  if (error && !deviceQuery.data) {
     return (
       <BootScreen>
         <div className="max-w-md space-y-3">
@@ -83,10 +92,9 @@ export default function LicenseGate({ children }) {
           <h1 className="text-lg font-semibold text-navy">Cannot reach the clinic server</h1>
           <p className="text-sm text-slate-500">{error.message}</p>
           <p className="text-xs text-slate-400">
-            Make sure the ZhanX clinic service is running on the server PC, then retry. The application cannot verify
-            its licence while the local service is offline.
+            Make sure the ZhanX clinic service is running on the server PC, then retry.
           </p>
-          <Button icon={RefreshCw} onClick={() => refetch()} loading={isFetching}>
+          <Button icon={RefreshCw} onClick={handleRetry} loading={isFetching}>
             Retry connection
           </Button>
         </div>
@@ -94,12 +102,12 @@ export default function LicenseGate({ children }) {
     );
   }
 
-  // 1. Check Tamilan Cloud Seat Lock / Approval Status first
+  // 1. Check Cloud Seat Lock / Approval Status first
   if (!deviceQuery.data || !deviceQuery.data.allowed) {
     return (
       <TamilanApprovalGate
         verification={deviceQuery.data || { allowed: false, reason: 'PENDING_APPROVAL' }}
-        onRetry={() => deviceQuery.refetch()}
+        onRetry={handleRetry}
       />
     );
   }
@@ -107,6 +115,6 @@ export default function LicenseGate({ children }) {
   // 2. Initial Setup if first time running
   if (data?.setupRequired) return <SetupPage status={data} />;
 
-  // 3. Allowed & Licensed by Tamilan Cloud -> Render Clinic Management Software!
+  // 3. Allowed & Licensed -> Render Clinic Management Software!
   return children;
 }

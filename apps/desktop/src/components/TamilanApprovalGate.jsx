@@ -40,20 +40,13 @@ export default function TamilanApprovalGate({ verification, onRetry }) {
   const reason = verification?.reason || 'PENDING_APPROVAL';
   const clinic = verification?.clinic || null;
 
-  // Auto-poll every 6 seconds if waiting for approval
-  useEffect(() => {
-    if (reason === 'PENDING_APPROVAL') {
-      const timer = setInterval(() => {
-        onRetry?.();
-      }, 6000);
-      return () => clearInterval(timer);
-    }
-  }, [reason, onRetry]);
-
   const handleManualCheck = async () => {
     setIsChecking(true);
-    await onRetry?.();
-    setTimeout(() => setIsChecking(false), 800);
+    try {
+      await onRetry?.();
+    } finally {
+      setTimeout(() => setIsChecking(false), 600);
+    }
   };
 
   const handleRegisterSubmit = async (e) => {

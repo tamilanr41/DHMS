@@ -9,7 +9,8 @@ router.post('/register', async (req, res, next) => {
   try {
     const {
       clinicName, doctorName, mobile, email, city, address,
-      requestedModules, requestedSystems, planName
+      requestedModules, requestedSystems, planName,
+      deviceFingerprint, deviceName, osPlatform, browserInfo
     } = req.body;
 
     if (!clinicName || !doctorName || !mobile) {
@@ -41,16 +42,29 @@ router.post('/register', async (req, res, next) => {
         city ? city.trim() : null,
         address ? address.trim() : null,
         JSON.stringify(modules),
-        JSON.stringify([]), // No active modules until Tamilan approves
+        JSON.stringify([]), // No active modules until Admin approves
         systems,
         planName || `${systems}-System Care Plan`
       ]
     );
 
+    const clinic = rows[0];
+
+    // Automatically bind the registering computer/device fingerprint to this clinic
+    if (deviceFingerprint) {
+      await query(
+        `INSERT INTO clinic_devices (
+          clinic_id, device_fingerprint, device_name, os_platform, browser_info, is_authorized
+        ) VALUES ($1, $2, $3, $4, $5, true)
+        ON CONFLICT (clinic_id, device_fingerprint) DO NOTHING`,
+        [clinic.id, deviceFingerprint, deviceName || 'Primary Station', osPlatform || null, browserInfo || null]
+      );
+    }
+
     res.status(201).json({
       success: true,
-      data: rows[0],
-      message: 'Clinic registration submitted. Pending Tamilan Admin approval and payment verification.'
+      data: clinic,
+      message: 'Clinic registration submitted. Pending administrator review and authorization.'
     });
   } catch (err) {
     next(err);
@@ -66,16 +80,31 @@ router.post('/device/verify', async (req, res, next) => {
       return res.status(400).json({ allowed: false, reason: 'DEVICE_ID_REQUIRED', message: 'Device identity fingerprint is missing.' });
     }
 
-    // If no clinic code is provided, check the primary / active clinic
-    let clinicQuery = clinicCode
-      ? await query('SELECT * FROM clinic_tenants WHERE clinic_code = $1', [clinicCode])
-      : await query('SELECT * FROM clinic_tenants ORDER BY created_at ASC LIMIT 1');
+    let clinic = null;
 
-    if (clinicQuery.rows.length === 0) {
-      return res.status(404).json({ allowed: false, reason: 'CLINIC_NOT_FOUND', message: 'No registered clinic found.' });
+    if (clinicCode) {
+      const q = await query('SELECT * FROM clinic_tenants WHERE clinic_code = $1', [clinicCode]);
+      if (q.rows.length > 0) clinic = q.rows[0];
+    } else {
+      // Find if this specific computer/device fingerprint was already registered to any clinic
+      const devQ = await query(
+        `SELECT c.* FROM clinic_tenants c
+         JOIN clinic_devices d ON d.clinic_id = c.id
+         WHERE d.device_fingerprint = $1
+         ORDER BY d.created_at DESC LIMIT 1`,
+        [deviceFingerprint]
+      );
+      if (devQ.rows.length > 0) clinic = devQ.rows[0];
     }
 
-    const clinic = clinicQuery.rows[0];
+    // If no clinic is linked to this computer or clinicCode:
+    if (!clinic) {
+      return res.json({
+        allowed: false,
+        reason: 'REGISTER_REQUIRED',
+        message: 'No registered clinic found on this workstation. Please submit clinic registration.'
+      });
+    }
 
     // Check Approval & License Expiry
     if (clinic.status === 'pending_approval') {
@@ -83,7 +112,7 @@ router.post('/device/verify', async (req, res, next) => {
         allowed: false,
         reason: 'PENDING_APPROVAL',
         clinic,
-        message: 'Your clinic registration is pending approval from Tamilan Admin. Access will be unlocked once payment is verified.'
+        message: 'Your clinic registration is under review. Access will unlock once approved by the administrator.'
       });
     }
 
@@ -92,7 +121,7 @@ router.post('/device/verify', async (req, res, next) => {
         allowed: false,
         reason: 'SUSPENDED',
         clinic,
-        message: 'Your clinic account has been temporarily suspended. Kindly contact Tamilan Admin to reactivate.'
+        message: 'Your clinic account has been temporarily suspended. Kindly contact the administrator.'
       });
     }
 
@@ -101,7 +130,7 @@ router.post('/device/verify', async (req, res, next) => {
         allowed: false,
         reason: 'EXPIRED',
         clinic,
-        message: `Your license expired on ${new Date(clinic.valid_until).toLocaleDateString()}. Contact Tamilan Admin to renew your subscription.`
+        message: `Your subscription expired on ${new Date(clinic.valid_until).toLocaleDateString()}. Contact the administrator to renew.`
       });
     }
 
@@ -142,7 +171,7 @@ router.post('/device/verify', async (req, res, next) => {
         clinic,
         activeSystems: activeCount,
         maxSystems: clinic.max_systems,
-        message: `System limit reached! Your license permits only ${clinic.max_systems} system(s) (currently ${activeCount} active). You cannot use this clinic license on this new computer without adding additional systems. Contact Tamilan Admin to upgrade.`
+        message: `Workstation seat limit reached! Your license allows ${clinic.max_systems} computer(s) (currently ${activeCount} active). Contact your administrator to add additional workstation seats.`
       });
     }
 

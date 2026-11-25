@@ -8,6 +8,7 @@
     "apps/desktop"
   ],
   "scripts": {
+    "build": "npm --workspace apps/desktop run build && node -e \"const fs=require('fs'); fs.cpSync('apps/desktop/dist', 'dist', {recursive:true});\"",
     "dev:server": "npm --workspace apps/server run dev",
     "dev:vite": "npm --workspace apps/desktop run dev:vite",
     "dev:electron": "npm --workspace apps/desktop run dev:electron",

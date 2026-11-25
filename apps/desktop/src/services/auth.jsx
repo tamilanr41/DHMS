@@ -40,7 +40,8 @@ export function AuthProvider({ children }) {
   }, []);
 
   const login = useCallback(async (username, password) => {
-    const res = await api.post('/auth/login', { username, password });
+    const clinicCode = typeof window !== 'undefined' ? localStorage.getItem('zhanx_my_clinic_code') : null;
+    const res = await api.post('/auth/login', { username, password, clinicCode: clinicCode || undefined });
     const data = res.data;
     setAccessToken(data.accessToken);
     await storeRefreshToken(data.refreshToken);

@@ -28,6 +28,7 @@ export async function authenticate(req, res, next) {
       username: profile.username,
       fullName: profile.full_name,
       role: profile.role_code,
+      clinicId: profile.clinic_id || payload.clinicId || null,
       permissions: profile.permissions,
       mustChangePassword: profile.must_change_password
     };

@@ -10,7 +10,7 @@ const hashToken = (token) => crypto.createHash('sha256').update(token).digest('h
 
 function signAccessToken(user) {
   return jwt.sign(
-    { sub: user.id, role: user.role_code, name: user.full_name },
+    { sub: user.id, role: user.role_code, name: user.full_name, clinicId: user.clinic_id || null },
     config.auth.jwtSecret,
     { expiresIn: `${config.auth.accessTtlMin}m`, issuer: 'zhanx-dentalcare', audience: 'zhanx-desktop' }
   );
@@ -29,7 +29,7 @@ async function createRefreshSession(client, user, req) {
 
 export async function loadUserWithPermissions(userId) {
   const { rows } = await query(
-    `SELECT u.id, u.username, u.full_name, u.is_active, u.must_change_password,
+    `SELECT u.id, u.username, u.full_name, u.is_active, u.must_change_password, u.clinic_id,
             r.code AS role_code, r.name AS role_name,
             COALESCE(array_agg(p.code) FILTER (WHERE p.code IS NOT NULL), '{}') AS permissions
      FROM users u
@@ -37,21 +37,36 @@ export async function loadUserWithPermissions(userId) {
      LEFT JOIN role_permissions rp ON rp.role_id = r.id
      LEFT JOIN permissions p ON p.id = rp.permission_id
      WHERE u.id = $1
-     GROUP BY u.id, r.code, r.name`,
+     GROUP BY u.id, u.clinic_id, r.code, r.name`,
     [userId]
   );
   return rows[0] || null;
 }
 
-export async function login({ username, password }, req) {
-  const { rows } = await query(
-    `SELECT u.id, u.username, u.password_hash, u.full_name, u.is_active, u.must_change_password,
-            u.failed_login_attempts, u.locked_until, r.code AS role_code
-     FROM users u JOIN roles r ON r.id = u.role_id
-     WHERE lower(u.username) = lower($1)`,
-    [String(username).trim()]
-  );
-  const user = rows[0];
+export async function login({ username, password, clinicCode }, req) {
+  let user;
+  if (clinicCode) {
+    const { rows } = await query(
+      `SELECT u.id, u.username, u.password_hash, u.full_name, u.is_active, u.must_change_password,
+              u.failed_login_attempts, u.locked_until, u.clinic_id, r.code AS role_code
+       FROM users u 
+       JOIN roles r ON r.id = u.role_id
+       LEFT JOIN clinic_tenants c ON c.id = u.clinic_id
+       WHERE lower(u.username) = lower($1) AND (c.clinic_code = $2 OR u.clinic_id IS NULL)`,
+      [String(username).trim(), String(clinicCode).trim()]
+    );
+    user = rows[0];
+  } else {
+    const { rows } = await query(
+      `SELECT u.id, u.username, u.password_hash, u.full_name, u.is_active, u.must_change_password,
+              u.failed_login_attempts, u.locked_until, u.clinic_id, r.code AS role_code
+       FROM users u JOIN roles r ON r.id = u.role_id
+       WHERE lower(u.username) = lower($1)
+       ORDER BY u.created_at DESC LIMIT 1`,
+      [String(username).trim()]
+    );
+    user = rows[0];
+  }
 
   if (user?.locked_until && new Date(user.locked_until) > new Date()) {
     const mins = Math.ceil((new Date(user.locked_until) - new Date()) / 60000);

@@ -74,6 +74,12 @@ export async function getLicenseStatus() {
     );
     if (rows.length > 0) {
       const activeClinic = rows[0];
+      const userQ = await query(
+        'SELECT count(*)::int AS count FROM users WHERE clinic_id = $1',
+        [activeClinic.id]
+      );
+      const isSetupNeeded = userQ.rows[0].count === 0;
+
       return {
         ...base,
         activated: true,
@@ -84,10 +90,12 @@ export async function getLicenseStatus() {
         license: {
           licenseId: activeClinic.clinic_code,
           clinicName: activeClinic.clinic_name,
-          tier: activeClinic.plan_name || 'Tamilan Pro Cloud',
+          tier: activeClinic.plan_name || 'Enterprise Cloud Care',
           validUntil: activeClinic.valid_until || '2099-12-31'
         },
-        setupRequired: false
+        clinicId: activeClinic.id,
+        clinicCode: activeClinic.clinic_code,
+        setupRequired: isSetupNeeded
       };
     }
   } catch {

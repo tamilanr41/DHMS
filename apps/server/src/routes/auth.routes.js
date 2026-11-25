@@ -19,7 +19,8 @@ const loginLimiter = rateLimit({
 
 const loginSchema = z.object({
   username: z.string().trim().min(1, 'Username is required').max(100),
-  password: z.string().min(1, 'Password is required').max(200)
+  password: z.string().min(1, 'Password is required').max(200),
+  clinicCode: z.string().trim().optional()
 });
 
 async function assertLicensed() {

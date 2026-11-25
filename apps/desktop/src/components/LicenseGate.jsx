@@ -121,7 +121,19 @@ export default function LicenseGate({ children }) {
   }
 
   // 2. Initial Setup if first time running
-  if (data?.setupRequired) return <SetupPage status={data} />;
+  if (data?.setupRequired) {
+    return (
+      <SetupPage
+        status={{
+          ...data,
+          clinicId: deviceQuery.data?.clinic?.id || data?.clinicId,
+          clinicCode: deviceQuery.data?.clinic?.clinic_code || data?.clinicCode,
+          clinicName: deviceQuery.data?.clinic?.clinic_name || data?.license?.clinicName,
+          dentistName: deviceQuery.data?.clinic?.doctor_name || data?.license?.dentistName
+        }}
+      />
+    );
+  }
 
   // 3. Allowed & Licensed -> Render Clinic Management Software!
   return children;

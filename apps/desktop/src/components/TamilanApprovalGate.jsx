@@ -237,17 +237,6 @@ export default function TamilanApprovalGate({ verification, onRetry }) {
             Register Clinic
           </button>
         </div>
-
-        {/* Discrete Admin Link */}
-        <div className="relative z-10 mt-6 pt-4 border-t border-slate-800/80 text-center">
-          <a
-            href="/tamilan"
-            className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-500 hover:text-teal-400 transition"
-          >
-            <span>System Administrator Console</span>
-            <ChevronRight size={12} />
-          </a>
-        </div>
       </div>
 
       {/* Clean Enterprise Clinic Registration Modal */}

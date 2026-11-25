@@ -37,14 +37,12 @@ export default function TamilanApprovalGate({ verification, onRetry }) {
   const [copiedCode, setCopiedCode] = useState(false);
   const [isChecking, setIsChecking] = useState(false);
 
-  // Local state if just registered in this browser session
-  const [justRegisteredClinic, setJustRegisteredClinic] = useState(null);
-
+  const savedCode = typeof window !== 'undefined' ? localStorage.getItem('zhanx_my_clinic_code') : null;
   const reason = verification?.reason || 'REGISTER_REQUIRED';
   const clinic = justRegisteredClinic || verification?.clinic || null;
 
   // Determine whether to show Registration form or Verification In Progress
-  const isRegistered = Boolean(clinic && clinic.clinic_code);
+  const isRegistered = Boolean(clinic?.clinic_code || justRegisteredClinic?.clinic_code || savedCode);
 
   const handleManualCheck = async () => {
     setIsChecking(true);
@@ -76,7 +74,7 @@ export default function TamilanApprovalGate({ verification, onRetry }) {
       };
 
       const res = await api.post('/tamilan/register', payload);
-      const newClinic = res.data?.data;
+      const newClinic = res?.data || res;
 
       if (newClinic?.clinic_code) {
         localStorage.setItem('zhanx_my_clinic_code', newClinic.clinic_code);
@@ -84,7 +82,7 @@ export default function TamilanApprovalGate({ verification, onRetry }) {
       }
 
       toast.success('Registration submitted! Your clinic is now awaiting administrator review.');
-      await onRetry?.();
+      await onRetry?.(newClinic?.clinic_code);
     } catch (err) {
       toast.error(err.message || 'Failed to submit registration');
     } finally {

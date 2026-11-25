@@ -39,21 +39,23 @@ export default function LicenseGate({ children }) {
   }, []);
 
   // 1. Device Seat / System Lock Verification via Tamilan API
-  const savedClinicCode = typeof window !== 'undefined' ? localStorage.getItem('zhanx_my_clinic_code') : null;
+  const [clinicCodeState, setClinicCodeState] = useState(
+    () => (typeof window !== 'undefined' ? localStorage.getItem('zhanx_my_clinic_code') : null)
+  );
 
   const deviceQuery = useQuery({
-    queryKey: ['tamilan-device-verify', deviceInfo?.fingerprint, savedClinicCode],
+    queryKey: ['tamilan-device-verify', deviceInfo?.fingerprint, clinicCodeState],
     queryFn: async () => {
       if (!deviceInfo?.fingerprint) return null;
-      return (
-        await api.post('/tamilan/device/verify', {
-          clinicCode: savedClinicCode || undefined,
-          deviceFingerprint: deviceInfo.fingerprint,
-          deviceName: deviceInfo.deviceName,
-          osPlatform: deviceInfo.osPlatform,
-          browserInfo: deviceInfo.browserInfo
-        })
-      ).data;
+      const activeCode = (typeof window !== 'undefined' ? localStorage.getItem('zhanx_my_clinic_code') : null) || clinicCodeState;
+      const res = await api.post('/tamilan/device/verify', {
+        clinicCode: activeCode || undefined,
+        deviceFingerprint: deviceInfo.fingerprint,
+        deviceName: deviceInfo.deviceName,
+        osPlatform: deviceInfo.osPlatform,
+        browserInfo: deviceInfo.browserInfo
+      });
+      return res?.data?.allowed !== undefined ? res.data : res;
     },
     enabled: Boolean(deviceInfo?.fingerprint),
     staleTime: 5_000
@@ -62,7 +64,10 @@ export default function LicenseGate({ children }) {
   // 2. Local fallback license status
   const { data, isLoading, error, refetch, isFetching } = useLicenseStatus();
 
-  const handleRetry = useCallback(() => {
+  const handleRetry = useCallback((newCode) => {
+    if (newCode) {
+      setClinicCodeState(newCode);
+    }
     deviceQuery.refetch();
     refetch();
   }, [deviceQuery, refetch]);

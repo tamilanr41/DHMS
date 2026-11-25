@@ -58,27 +58,39 @@ export default function TamilanAdminPage() {
   // Queries
   const statsQuery = useQuery({
     queryKey: ['tamilan-stats'],
-    queryFn: async () => (await api.get('/tamilan/stats')).data.data,
+    queryFn: async () => {
+      const res = await api.get('/tamilan/stats');
+      return res?.data || res;
+    },
     enabled: isAuthenticated,
-    refetchInterval: 15_000
+    refetchInterval: 10_000
   });
 
   const clinicsQuery = useQuery({
     queryKey: ['tamilan-clinics'],
-    queryFn: async () => (await api.get('/tamilan/clinics')).data.data,
+    queryFn: async () => {
+      const res = await api.get('/tamilan/clinics');
+      return res?.data || res || [];
+    },
     enabled: isAuthenticated,
-    refetchInterval: 15_000
+    refetchInterval: 10_000
   });
 
   const paymentsQuery = useQuery({
     queryKey: ['tamilan-payments'],
-    queryFn: async () => (await api.get('/tamilan/payments')).data.data,
+    queryFn: async () => {
+      const res = await api.get('/tamilan/payments');
+      return res?.data || res || [];
+    },
     enabled: isAuthenticated && activeTab === 'payments'
   });
 
   const clinicDevicesQuery = useQuery({
     queryKey: ['tamilan-clinic-devices', deviceClinic?.id],
-    queryFn: async () => (await api.get(`/tamilan/clinics/${deviceClinic.id}/devices`)).data.data,
+    queryFn: async () => {
+      const res = await api.get(`/tamilan/clinics/${deviceClinic.id}/devices`);
+      return res?.data || res || [];
+    },
     enabled: Boolean(deviceClinic?.id)
   });
 

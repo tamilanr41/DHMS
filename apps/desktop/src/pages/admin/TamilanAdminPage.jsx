@@ -88,7 +88,7 @@ export default function TamilanAdminPage() {
       setAuthPin('7788');
       localStorage.setItem('tamilan_pin_session', '7788');
       setPinError(false);
-      toast.success('Welcome Tamilan Master Admin!');
+      toast.success('Welcome Master Admin!');
     } else {
       setPinError(true);
       toast.error('Invalid Master PIN. Please enter correct authorization code.');
@@ -104,7 +104,7 @@ export default function TamilanAdminPage() {
       durationMonths: '1',
       maxSystems: String(clinic.max_systems || 1),
       activeModules: clinic.active_modules?.length ? clinic.active_modules : clinic.requested_modules || ALL_MODULES.map((m) => m.id),
-      notes: `Fee collection by Tamilan Admin for ${clinic.clinic_name}`
+      notes: `Subscription activation for ${clinic.clinic_name}`
     });
     setActivateModalOpen(true);
   };
@@ -197,10 +197,10 @@ export default function TamilanAdminPage() {
               Restricted Master Console
             </span>
             <h1 className="mt-3 text-2xl font-black tracking-tight text-white">
-              TAMILAN Super Admin
+              Enterprise Super Admin
             </h1>
             <p className="mt-1 text-xs font-medium text-slate-400">
-              Enter master security authorization PIN to manage multi-clinic licenses, device locks &amp; fee collection.
+              Enter master security authorization PIN to manage multi-clinic licenses, device locks &amp; subscriptions.
             </p>
           </div>
 
@@ -227,7 +227,7 @@ export default function TamilanAdminPage() {
               type="submit"
               className="w-full rounded-2xl bg-gradient-to-r from-[#009da6] to-[#08636d] py-3 text-xs font-black text-white hover:opacity-95 shadow-lg shadow-teal-700/30 transition cursor-pointer"
             >
-              Unlock Tamilan Suite →
+              Unlock Admin Console →
             </button>
           </form>
 
@@ -258,7 +258,7 @@ export default function TamilanAdminPage() {
           <div className="space-y-1.5">
             <div className="inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-0.5 text-xs font-black tracking-wide text-white backdrop-blur-sm">
               <ShieldCheck size={14} className="stroke-[2.5]" />
-              TAMILAN MASTER ADMIN · SaaS LICENSING SUITE
+              ENTERPRISE MASTER ADMIN · SaaS LICENSING SUITE
             </div>
             <h1 className="text-2xl font-black tracking-tight sm:text-3xl">
               Clinic Registration &amp; Device Seat Control

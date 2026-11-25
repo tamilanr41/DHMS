@@ -14,14 +14,20 @@
   ELECTRON_SKIP_BINARY_DOWNLOAD = "1"
   NPM_FLAGS = "--include=dev"
 
-# Proxy API requests directly to your Render backend
+# 1. Do not rewrite missing static assets to index.html (avoids MIME type 'text/html' error on stale CSS/JS)
+[[redirects]]
+  from = "/assets/*"
+  to = "/404.html"
+  status = 404
+
+# 2. Proxy API requests directly to your Render backend
 [[redirects]]
   from = "/api/*"
   to = "https://dhms-73i8.onrender.com/api/:splat"
   status = 200
   force = false
 
-# Single Page Application (SPA) catch-all fallback
+# 3. Single Page Application (SPA) catch-all fallback
 # Routes like /tamilan, /consultations, /billing will load index.html without 404
 [[redirects]]
   from = "/*"
@@ -36,3 +42,24 @@
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
     Permissions-Policy = "camera=(), microphone=(), geolocation=()"
+
+# Never cache index.html so mobile browsers always request the fresh build bundle immediately
+[[headers]]
+  for = "/"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+    Pragma = "no-cache"
+    Expires = "0"
+
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+    Pragma = "no-cache"
+    Expires = "0"
+
+# Long-term immutable caching for hashed asset files
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"

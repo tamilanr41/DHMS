@@ -29,6 +29,12 @@ const queryClient = new QueryClient({
 // the URL to the drive root and breaks routing; hash routing works on file:// and http.
 const Router = window.location.protocol === 'file:' ? HashRouter : BrowserRouter;
 
+// Automatically reload if a stale cached asset encounters an error after a new deployment
+window.addEventListener('vite:preloadError', (event) => {
+  event.preventDefault();
+  window.location.reload();
+});
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>

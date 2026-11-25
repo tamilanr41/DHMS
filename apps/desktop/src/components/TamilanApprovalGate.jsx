@@ -136,7 +136,7 @@ export default function TamilanApprovalGate({ verification, onRetry }) {
   const isExpired = reason === 'EXPIRED';
 
   return (
-    <main className="relative flex min-h-screen h-screen overflow-hidden bg-[#0b1220] text-white font-sans selection:bg-teal-500 selection:text-white">
+    <main className="relative flex min-h-screen min-h-[100dvh] overflow-y-auto bg-[#0b1220] text-white font-sans selection:bg-teal-500 selection:text-white">
       {/* Background Image */}
       <img
         src="/bg_img.png"

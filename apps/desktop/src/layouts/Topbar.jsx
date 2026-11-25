@@ -108,15 +108,15 @@ export function GlobalSearch() {
   };
 
   return (
-    <div ref={ref} className="relative w-full max-w-[360px] lg:max-w-[420px]">
+    <div ref={ref} className="relative w-full max-w-[160px] sm:max-w-[260px] md:max-w-[340px] lg:max-w-[420px]">
       <div
-        className={`flex h-10 w-full items-center gap-2.5 rounded-full border bg-white/90 px-3.5 text-xs shadow-sm transition-all duration-200 dark:bg-slate-800/90 ${
+        className={`flex h-9 sm:h-10 w-full items-center gap-2 sm:gap-2.5 rounded-full border bg-white/90 px-2.5 sm:px-3.5 text-xs shadow-sm transition-all duration-200 dark:bg-slate-800/90 ${
           focused
             ? 'border-[#0a7f8b] ring-2 ring-[#0a7f8b]/20 shadow-[0_4px_16px_rgba(10,127,139,0.15)]'
             : 'border-slate-200 hover:border-slate-300 dark:border-slate-700'
         }`}
       >
-        <Search size={15} className="shrink-0 text-slate-400" />
+        <Search size={14} className="shrink-0 text-slate-400" />
         <input
           ref={inputRef}
           type="search"
@@ -130,8 +130,8 @@ export function GlobalSearch() {
             setOpen(true);
           }}
           onBlur={() => setFocused(false)}
-          placeholder="Search patients, charts, MRN..."
-          className="w-full bg-transparent text-[12.5px] font-medium text-slate-800 placeholder-slate-400 outline-none dark:text-slate-100"
+          placeholder="Search..."
+          className="w-full bg-transparent text-[12px] sm:text-[12.5px] font-medium text-slate-800 placeholder-slate-400 outline-none dark:text-slate-100"
         />
         {isFetching ? (
           <Loader2 size={13} className="shrink-0 animate-spin text-primary-600" />
@@ -302,7 +302,7 @@ function KioskButton() {
       onClick={() => navigate('/kiosk')}
       aria-label="Open Tablet Self Check-in"
       title="Open Receptionist Tablet Self Check-in Kiosk"
-      className="btn-header"
+      className="btn-header hidden sm:inline-flex"
     >
       <Tablet size={16} className="text-primary-600 dark:text-primary-400" />
     </button>
@@ -382,26 +382,37 @@ function UserMenu() {
   );
 }
 
-export default function Topbar({ onToggleSidebar }) {
+export default function Topbar({ onToggleSidebar, onToggleMobile }) {
   const trail = useTrail();
   const page = trail[trail.length - 1];
 
   return (
-    <header className="sticky top-3 z-30 mx-auto w-[calc(100%-1.5rem)] max-w-[1680px] rounded-2xl border border-white/80 bg-white/80 px-4 py-2.5 shadow-[0_16px_36px_-18px_rgba(10,127,139,0.22)] backdrop-blur-2xl transition-all dark:border-slate-800/80 dark:bg-slate-900/80 dark:shadow-[0_16px_36px_-18px_rgba(0,0,0,0.6)]">
-      <div className="flex items-center justify-between gap-3">
+    <header className="sticky top-2 sm:top-3 z-30 mx-auto w-[calc(100%-1rem)] sm:w-[calc(100%-1.5rem)] max-w-[1680px] rounded-2xl border border-white/80 bg-white/80 px-2.5 sm:px-4 py-2 sm:py-2.5 shadow-[0_16px_36px_-18px_rgba(10,127,139,0.22)] backdrop-blur-2xl transition-all dark:border-slate-800/80 dark:bg-slate-900/80 dark:shadow-[0_16px_36px_-18px_rgba(0,0,0,0.6)]">
+      <div className="flex items-center justify-between gap-2 sm:gap-3">
         {/* Left: Sidebar Toggle + Breadcrumb */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          {/* Mobile hamburger */}
+          <button
+            type="button"
+            onClick={onToggleMobile}
+            aria-label="Open mobile menu"
+            className="btn-header lg:hidden cursor-pointer"
+          >
+            <Menu size={18} />
+          </button>
+
+          {/* Desktop collapse toggle */}
           <button
             type="button"
             onClick={onToggleSidebar}
             aria-label="Toggle sidebar"
-            className="btn-header"
+            className="btn-header hidden lg:flex cursor-pointer"
           >
             <Menu size={17} />
           </button>
 
-          <nav aria-label="Breadcrumb" className="hidden sm:block">
-            <ol className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 dark:text-slate-500">
+          <nav aria-label="Breadcrumb">
+            <ol className="hidden md:flex items-center gap-1.5 text-xs font-semibold text-slate-400 dark:text-slate-500">
               {trail.map((item, idx) => (
                 <li key={item} className="flex items-center gap-1.5">
                   {idx > 0 && <ChevronRight size={12} className="text-slate-300 dark:text-slate-600" />}
@@ -411,16 +422,19 @@ export default function Topbar({ onToggleSidebar }) {
                 </li>
               ))}
             </ol>
+            <span className="block md:hidden text-xs font-bold text-slate-800 dark:text-white truncate max-w-[110px] sm:max-w-[180px]">
+              {page}
+            </span>
           </nav>
         </div>
 
         {/* Center: Global Search */}
-        <div className="flex flex-1 justify-center px-2">
+        <div className="flex flex-1 justify-center px-1 sm:px-2 min-w-0">
           <GlobalSearch />
         </div>
 
         {/* Right: Actions */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
           <QuickBookButton />
           <Notifications />
           <KioskButton />

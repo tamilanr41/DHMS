@@ -255,7 +255,7 @@ export default function LoginPage() {
   };
 
   return (
-    <main className="relative flex min-h-screen h-screen overflow-hidden bg-[#0b1220] text-white">
+    <main className="relative flex min-h-screen min-h-[100dvh] overflow-y-auto bg-[#0b1220] text-white selection:bg-teal-500 selection:text-white">
       {/* Background Image */}
       <img
         src="/bg_img.png"

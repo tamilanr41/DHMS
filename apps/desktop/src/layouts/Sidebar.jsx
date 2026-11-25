@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Users, CalendarDays, ListOrdered, Stethoscope, Grid3X3, ClipboardList,
   Pill, ReceiptText, Wallet, Package, FlaskConical, BarChart3, UserCog, Settings, DatabaseBackup,
   ScrollText, ChevronsLeft, ChevronsRight, LogOut, KeyRound, BellRing, ShieldCheck, Layers,
-  Activity, Sparkles, ChevronDown
+  Activity, Sparkles, ChevronDown, X
 } from 'lucide-react';
 import { useAuth } from '../services/auth.jsx';
 import { useClinic, useBrandImage } from '../hooks/useClinic.js';
@@ -66,7 +66,7 @@ const NAV = [
   }
 ];
 
-export default function Sidebar({ collapsed, onToggle }) {
+export default function Sidebar({ collapsed, onToggle, mobileOpen, onCloseMobile }) {
   const { user, has, logout } = useAuth();
   const navigate = useNavigate();
   const { pathname } = useLocation();
@@ -77,15 +77,18 @@ export default function Sidebar({ collapsed, onToggle }) {
 
   return (
     <aside
-      className={`fixed inset-y-0 left-0 z-40 flex flex-col border-r border-slate-200/80 bg-white/90 backdrop-blur-2xl transition-all duration-300 dark:border-slate-800 dark:bg-slate-900/90 ${collapsed ? 'w-[78px]' : 'w-[276px]'
-        }`}
+      className={`fixed inset-y-0 left-0 z-50 flex flex-col border-r border-slate-200/80 bg-white/95 backdrop-blur-2xl transition-all duration-300 dark:border-slate-800 dark:bg-slate-900/95 ${
+        mobileOpen
+          ? 'translate-x-0 w-[280px] shadow-2xl'
+          : '-translate-x-full lg:translate-x-0'
+      } ${collapsed ? 'lg:w-[78px]' : 'lg:w-[276px]'}`}
       aria-label="Sidebar"
     >
       {/* Brand Header */}
       <div className="flex h-[72px] shrink-0 items-center justify-between border-b border-slate-100 px-4 dark:border-slate-800">
-        <NavLink to="/" className="flex min-w-0 items-center gap-3">
+        <NavLink to="/" onClick={() => onCloseMobile?.()} className="flex min-w-0 items-center gap-3">
           <Logo className="h-10 w-10 shrink-0 shadow-[0_8px_16px_-4px_rgba(10,127,139,0.35)]" />
-          {!collapsed && (
+          {(!collapsed || mobileOpen) && (
             <div className="min-w-0 leading-tight">
               <span className="block font-sans text-[15px] font-extrabold tracking-tight text-slate-900 dark:text-white">
                 {clinic?.name || 'ZhanX Dental'}
@@ -96,11 +99,23 @@ export default function Sidebar({ collapsed, onToggle }) {
             </div>
           )}
         </NavLink>
+
+        {/* Mobile Close Button */}
+        <button
+          type="button"
+          onClick={onCloseMobile}
+          className="flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200 lg:hidden cursor-pointer"
+          aria-label="Close sidebar"
+        >
+          <X size={18} />
+        </button>
+
+        {/* Desktop Collapse Toggle */}
         {!collapsed && (
           <button
             type="button"
             onClick={onToggle}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+            className="hidden lg:flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200 cursor-pointer"
             aria-label="Collapse sidebar"
             title="Collapse sidebar (Ctrl+B)"
           >
@@ -116,7 +131,7 @@ export default function Sidebar({ collapsed, onToggle }) {
           if (!visible.length) return null;
           return (
             <div key={group.title} className={groupIndex === 0 ? '' : 'mt-5'}>
-              {!collapsed ? (
+              {!collapsed || mobileOpen ? (
                 <p className="px-3 pb-2 text-[10.5px] font-bold uppercase tracking-[0.1em] text-slate-400 dark:text-slate-500">
                   {group.title}
                 </p>
@@ -129,10 +144,11 @@ export default function Sidebar({ collapsed, onToggle }) {
                     key={item.to}
                     to={item.to}
                     end={item.end}
-                    title={collapsed ? item.label : undefined}
+                    onClick={() => onCloseMobile?.()}
+                    title={collapsed && !mobileOpen ? item.label : undefined}
                     className={({ isActive }) =>
                       `group relative flex items-center rounded-xl text-[13px] font-semibold transition-all duration-200 ${
-                        collapsed ? 'justify-center px-2 py-2.5' : 'gap-3 px-3 py-2.5'
+                        collapsed && !mobileOpen ? 'justify-center px-2 py-2.5' : 'gap-3 px-3 py-2.5'
                       } ${
                         isActive
                           ? 'bg-gradient-to-r from-[#0a7f8b] to-[#14b8c8] text-white shadow-[0_8px_20px_-6px_rgba(10,127,139,0.6)] font-bold'
@@ -151,10 +167,10 @@ export default function Sidebar({ collapsed, onToggle }) {
                               : 'text-slate-400 transition-colors group-hover:text-[#0a7f8b] dark:group-hover:text-[#38bdf8]'
                           }
                         />
-                        {!collapsed && (
+                        {(!collapsed || mobileOpen) && (
                           <span className="flex-1 truncate">{item.label}</span>
                         )}
-                        {!collapsed && item.badge && (
+                        {(!collapsed || mobileOpen) && item.badge && (
                           <span
                             className={`rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide ${
                               isActive
@@ -177,7 +193,7 @@ export default function Sidebar({ collapsed, onToggle }) {
 
       {/* User Footer Card */}
       <div className="shrink-0 border-t border-slate-100 p-3 dark:border-slate-800">
-        {collapsed ? (
+        {collapsed && !mobileOpen ? (
           <div className="flex flex-col items-center gap-2">
             <button
               type="button"

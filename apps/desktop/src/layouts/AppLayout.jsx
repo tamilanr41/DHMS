@@ -8,6 +8,7 @@ const STORAGE_KEY = 'zhanx.sidebarCollapsed';
 
 export default function AppLayout({ children }) {
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(STORAGE_KEY) === '1');
+  const [mobileOpen, setMobileOpen] = useState(false);
   const { pathname } = useLocation();
 
   const supportSession = typeof window !== 'undefined'
@@ -29,10 +30,24 @@ export default function AppLayout({ children }) {
     return () => document.removeEventListener('keydown', onKey);
   }, []);
 
+  // Close mobile drawer on route change & scroll to top
   useEffect(() => {
+    setMobileOpen(false);
     const main = document.getElementById('main-content');
     if (main) main.scrollTop = 0;
   }, [pathname]);
+
+  // Lock scroll on mobile when sidebar is open
+  useEffect(() => {
+    if (mobileOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [mobileOpen]);
 
   return (
     <div className="relative min-h-screen bg-slate-50/70 font-sans text-slate-800 transition-colors dark:bg-slate-950 dark:text-slate-100">
@@ -46,15 +61,32 @@ export default function AppLayout({ children }) {
         className="pointer-events-none fixed bottom-0 left-64 h-96 w-96 rounded-full bg-cyan-200/20 blur-3xl dark:bg-cyan-950/10"
       />
 
-      <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((v) => !v)} />
+      {/* Mobile Backdrop Overlay */}
+      {mobileOpen && (
+        <div
+          role="presentation"
+          onClick={() => setMobileOpen(false)}
+          className="fixed inset-0 z-40 bg-slate-950/60 backdrop-blur-xs transition-opacity duration-300 lg:hidden"
+          aria-hidden="true"
+        />
+      )}
 
+      {/* Sidebar (Responsive drawer on mobile, fixed collapsed/expanded on desktop) */}
+      <Sidebar
+        collapsed={collapsed}
+        onToggle={() => setCollapsed((v) => !v)}
+        mobileOpen={mobileOpen}
+        onCloseMobile={() => setMobileOpen(false)}
+      />
+
+      {/* Main Content Area */}
       <div
-        className={`flex min-h-screen min-w-0 flex-col transition-all duration-300 ${
-          collapsed ? 'ml-[78px]' : 'ml-[276px]'
+        className={`flex min-h-screen min-w-0 flex-col transition-all duration-300 ml-0 ${
+          collapsed ? 'lg:ml-[78px]' : 'lg:ml-[276px]'
         }`}
       >
         {supportSession && (
-          <div className="sticky top-0 z-40 flex flex-wrap items-center justify-between gap-2 border-b border-amber-500/40 bg-gradient-to-r from-amber-600 via-amber-700 to-amber-800 px-4 py-2.5 text-white shadow-md">
+          <div className="sticky top-0 z-30 flex flex-wrap items-center justify-between gap-2 border-b border-amber-500/40 bg-gradient-to-r from-amber-600 via-amber-700 to-amber-800 px-4 py-2.5 text-white shadow-md">
             <div className="flex items-center gap-2.5 text-xs font-bold">
               <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-white/20 text-sm">🛠️</span>
               <span>
@@ -74,9 +106,12 @@ export default function AppLayout({ children }) {
           </div>
         )}
 
-        <Topbar onToggleSidebar={() => setCollapsed((v) => !v)} />
+        <Topbar
+          onToggleSidebar={() => setCollapsed((v) => !v)}
+          onToggleMobile={() => setMobileOpen((v) => !v)}
+        />
 
-        <main className="flex-1 px-3 py-4 md:px-5 lg:px-6" id="main-content">
+        <main className="flex-1 px-2.5 py-3 sm:px-4 sm:py-4 md:px-5 lg:px-6" id="main-content">
           <div key={pathname} className="mx-auto w-full max-w-[1680px]">
             {children}
           </div>

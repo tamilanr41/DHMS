@@ -43,7 +43,7 @@ export default function TamilanApprovalGate({ verification, onRetry }) {
   const clinic = justRegisteredClinic || verification?.clinic || null;
 
   // Determine whether to show Registration form or Verification In Progress
-  const isRegistered = Boolean(clinic?.clinic_code || justRegisteredClinic?.clinic_code || savedCode);
+  const isRegistered = Boolean(justRegisteredClinic) || (reason !== 'REGISTER_REQUIRED' && Boolean(clinic?.clinic_code || savedCode));
 
   const handleManualCheck = async () => {
     setIsChecking(true);

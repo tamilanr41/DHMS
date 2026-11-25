@@ -60,7 +60,7 @@ export default function TamilanAdminPage() {
     queryKey: ['tamilan-stats'],
     queryFn: async () => {
       const res = await api.get('/tamilan/stats');
-      return res?.data || res;
+      return res?.data ?? res ?? { totalClinics: 0, pendingApprovals: 0, activeClinics: 0, totalRevenue: 0, authorizedDevices: 0 };
     },
     enabled: isAuthenticated,
     refetchInterval: 10_000
@@ -70,7 +70,8 @@ export default function TamilanAdminPage() {
     queryKey: ['tamilan-clinics'],
     queryFn: async () => {
       const res = await api.get('/tamilan/clinics');
-      return res?.data || res || [];
+      const list = res?.data ?? res;
+      return Array.isArray(list) ? list : [];
     },
     enabled: isAuthenticated,
     refetchInterval: 10_000
@@ -80,7 +81,8 @@ export default function TamilanAdminPage() {
     queryKey: ['tamilan-payments'],
     queryFn: async () => {
       const res = await api.get('/tamilan/payments');
-      return res?.data || res || [];
+      const list = res?.data ?? res;
+      return Array.isArray(list) ? list : [];
     },
     enabled: isAuthenticated && activeTab === 'payments'
   });
@@ -89,7 +91,8 @@ export default function TamilanAdminPage() {
     queryKey: ['tamilan-clinic-devices', deviceClinic?.id],
     queryFn: async () => {
       const res = await api.get(`/tamilan/clinics/${deviceClinic.id}/devices`);
-      return res?.data || res || [];
+      const list = res?.data ?? res;
+      return Array.isArray(list) ? list : [];
     },
     enabled: Boolean(deviceClinic?.id)
   });

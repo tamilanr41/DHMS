@@ -55,7 +55,7 @@ export default function LicenseGate({ children }) {
         osPlatform: deviceInfo.osPlatform,
         browserInfo: deviceInfo.browserInfo
       });
-      return res?.data?.allowed !== undefined ? res.data : res;
+      return (res?.data?.allowed !== undefined ? res.data : res) ?? null;
     },
     enabled: Boolean(deviceInfo?.fingerprint),
     staleTime: 5_000

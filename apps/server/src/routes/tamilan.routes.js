@@ -686,4 +686,66 @@ router.get('/database-health', async (req, res, next) => {
   }
 });
 
+// 17. Single Clinic Live Activity Feed & Staff Pulse
+router.get('/live-activity', async (req, res, next) => {
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+
+    const [auditRes, staffRes, todayOps, todayFinance, workstations] = await Promise.all([
+      // 1. Recent Audit Logs (Staff actions: billing, consults, edits)
+      query(`
+        SELECT a.id, a.action, a.username, a.entity_type, a.entity_id, a.details, a.ip, a.created_at
+        FROM audit_logs a
+        ORDER BY a.created_at DESC
+        LIMIT 50
+      `),
+      // 2. Staff Roster & Status
+      query(`
+        SELECT u.id, u.username, u.full_name, u.is_active, u.last_login_at, r.name AS role_name, r.code AS role_code
+        FROM users u
+        LEFT JOIN roles r ON r.id = u.role_id
+        ORDER BY u.created_at ASC
+      `),
+      // 3. Today's Clinical Counts
+      query(`
+        SELECT
+          (SELECT count(*)::int FROM appointments WHERE appointment_date = $1) AS today_appointments,
+          (SELECT count(*)::int FROM patients WHERE created_at::date = $1::date) AS today_new_patients,
+          (SELECT count(*)::int FROM prescriptions WHERE created_at::date = $1::date) AS today_prescriptions,
+          (SELECT count(*)::int FROM invoices WHERE invoice_date = $1) AS today_invoices
+      `, [today]),
+      // 4. Today's Financial Collection (Cash vs UPI vs Card)
+      query(`
+        SELECT 
+          COALESCE(SUM(amount), 0) AS total_collected,
+          COALESCE(SUM(CASE WHEN method = 'Cash' THEN amount ELSE 0 END), 0) AS cash_collected,
+          COALESCE(SUM(CASE WHEN method ILIKE '%UPI%' THEN amount ELSE 0 END), 0) AS upi_collected,
+          COALESCE(SUM(CASE WHEN method ILIKE '%Card%' THEN amount ELSE 0 END), 0) AS card_collected
+        FROM payments
+        WHERE payment_date::date = $1::date
+      `, [today]),
+      // 5. Workstations / Connected PCs
+      query(`
+        SELECT d.id, d.device_fingerprint, d.device_name, d.os_platform, d.last_seen_at, d.is_authorized
+        FROM clinic_devices d
+        ORDER BY d.last_seen_at DESC
+        LIMIT 10
+      `)
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        recentActivity: auditRes.rows || [],
+        staff: staffRes.rows || [],
+        todayOps: todayOps.rows[0] || {},
+        todayFinance: todayFinance.rows[0] || {},
+        workstations: workstations.rows || []
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;

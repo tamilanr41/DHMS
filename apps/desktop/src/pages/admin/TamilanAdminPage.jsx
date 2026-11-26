@@ -38,8 +38,9 @@ export default function TamilanAdminPage() {
   const [pinError, setPinError] = useState(false);
   const isAuthenticated = authPin === '7788';
 
-  const [activeTab, setActiveTab] = useState('clinics'); // clinics | payments | database
+  const [activeTab, setActiveTab] = useState('live'); // live | clinics | payments | database
   const [search, setSearch] = useState('');
+  const [activitySearch, setActivitySearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all'); // all | pending | active | suspended
 
   // Modal States
@@ -97,6 +98,16 @@ export default function TamilanAdminPage() {
   const [isFixing, setIsFixing] = useState(false);
 
   // Queries
+  const liveActivityQuery = useQuery({
+    queryKey: ['tamilan-live-activity'],
+    queryFn: async () => {
+      const res = await api.get('/tamilan/live-activity');
+      return res?.data ?? res ?? { recentActivity: [], staff: [], todayOps: {}, todayFinance: {}, workstations: [] };
+    },
+    enabled: isAuthenticated,
+    refetchInterval: 8_000
+  });
+
   const statsQuery = useQuery({
     queryKey: ['tamilan-stats'],
     queryFn: async () => {
@@ -611,6 +622,18 @@ If you or your staff have any questions regarding patient charts, prescriptions,
           <div className="flex items-center gap-1 rounded-2xl bg-slate-100/80 p-1 dark:bg-slate-800/80">
             <button
               type="button"
+              onClick={() => setActiveTab('live')}
+              className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-1.5 text-xs font-black transition cursor-pointer ${
+                activeTab === 'live'
+                  ? 'bg-white text-[#0a7f8b] shadow-xs dark:bg-slate-900 dark:text-teal-300'
+                  : 'text-slate-500 hover:text-slate-900 dark:text-slate-400'
+              }`}
+            >
+              <Activity size={13} className="text-[#0a7f8b]" />
+              Live Clinic Pulse &amp; Staff Actions
+            </button>
+            <button
+              type="button"
               onClick={() => setActiveTab('clinics')}
               className={`rounded-xl px-4 py-1.5 text-xs font-black transition cursor-pointer ${
                 activeTab === 'clinics'
@@ -618,18 +641,7 @@ If you or your staff have any questions regarding patient charts, prescriptions,
                   : 'text-slate-500 hover:text-slate-900 dark:text-slate-400'
               }`}
             >
-              Clinic Operations &amp; Telemetry ({stats.totalClinics})
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('payments')}
-              className={`rounded-xl px-4 py-1.5 text-xs font-black transition cursor-pointer ${
-                activeTab === 'payments'
-                  ? 'bg-white text-[#0a7f8b] shadow-xs dark:bg-slate-900 dark:text-teal-300'
-                  : 'text-slate-500 hover:text-slate-900 dark:text-slate-400'
-              }`}
-            >
-              Fee Collection Ledger
+              Clinic Licenses ({stats.totalClinics})
             </button>
             <button
               type="button"
@@ -642,6 +654,17 @@ If you or your staff have any questions regarding patient charts, prescriptions,
             >
               <Database size={13} />
               System &amp; DB Health
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('payments')}
+              className={`rounded-xl px-4 py-1.5 text-xs font-black transition cursor-pointer ${
+                activeTab === 'payments'
+                  ? 'bg-white text-[#0a7f8b] shadow-xs dark:bg-slate-900 dark:text-teal-300'
+                  : 'text-slate-500 hover:text-slate-900 dark:text-slate-400'
+              }`}
+            >
+              Fee Collection Ledger
             </button>
           </div>
 
@@ -657,6 +680,7 @@ If you or your staff have any questions regarding patient charts, prescriptions,
             <button
               type="button"
               onClick={() => {
+                queryClient.invalidateQueries({ queryKey: ['tamilan-live-activity'] });
                 queryClient.invalidateQueries({ queryKey: ['tamilan-clinics'] });
                 queryClient.invalidateQueries({ queryKey: ['tamilan-stats'] });
                 queryClient.invalidateQueries({ queryKey: ['tamilan-db-health'] });
@@ -664,12 +688,246 @@ If you or your staff have any questions regarding patient charts, prescriptions,
               className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300 transition shadow-2xs cursor-pointer"
               title="Refresh Registry"
             >
-              <RefreshCw size={14} className={clinicsQuery.isFetching ? 'animate-spin text-[#0a7f8b]' : ''} />
+              <RefreshCw size={14} className={liveActivityQuery.isFetching || clinicsQuery.isFetching ? 'animate-spin text-[#0a7f8b]' : ''} />
             </button>
           </div>
         </div>
 
-        {activeTab === 'clinics' ? (
+        {activeTab === 'live' ? (
+          /* Live Clinic Pulse & Staff Activity Feed */
+          <div className="space-y-6">
+            {/* Today's Pulse Metrics Bar */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="rounded-3xl border border-emerald-200/80 bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-transparent p-4 dark:border-emerald-900/40">
+                <div className="flex items-center justify-between text-slate-500">
+                  <span className="text-[11px] font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-300">Today's Revenue</span>
+                  <Wallet size={18} className="text-emerald-600" />
+                </div>
+                <p className="mt-2 text-2xl font-black text-emerald-600 dark:text-emerald-400">
+                  {formatMoney(liveActivityQuery.data?.todayFinance?.total_collected || 0)}
+                </p>
+                <div className="mt-1 flex items-center gap-2 text-[10.5px] font-bold text-slate-500">
+                  <span>Cash: {formatMoney(liveActivityQuery.data?.todayFinance?.cash_collected || 0)}</span>
+                  <span>·</span>
+                  <span>UPI: {formatMoney(liveActivityQuery.data?.todayFinance?.upi_collected || 0)}</span>
+                </div>
+              </div>
+
+              <div className="rounded-3xl border border-teal-200/80 bg-gradient-to-br from-teal-500/10 via-teal-500/5 to-transparent p-4 dark:border-teal-900/40">
+                <div className="flex items-center justify-between text-slate-500">
+                  <span className="text-[11px] font-black uppercase tracking-wider text-[#0a7f8b] dark:text-teal-300">Appointments Today</span>
+                  <Calendar size={18} className="text-[#0a7f8b]" />
+                </div>
+                <p className="mt-2 text-2xl font-black text-slate-900 dark:text-white">
+                  {liveActivityQuery.data?.todayOps?.today_appointments ?? 0}
+                </p>
+                <p className="text-[10.5px] font-medium text-slate-400 mt-1">Booked &amp; walk-in consultations</p>
+              </div>
+
+              <div className="rounded-3xl border border-blue-200/80 bg-gradient-to-br from-blue-500/10 via-blue-500/5 to-transparent p-4 dark:border-blue-900/40">
+                <div className="flex items-center justify-between text-slate-500">
+                  <span className="text-[11px] font-black uppercase tracking-wider text-blue-700 dark:text-blue-300">Invoices Billed</span>
+                  <FileText size={18} className="text-blue-600" />
+                </div>
+                <p className="mt-2 text-2xl font-black text-slate-900 dark:text-white">
+                  {liveActivityQuery.data?.todayOps?.today_invoices ?? 0}
+                </p>
+                <p className="text-[10.5px] font-medium text-slate-400 mt-1">Receipts created at checkout</p>
+              </div>
+
+              <div className="rounded-3xl border border-purple-200/80 bg-gradient-to-br from-purple-500/10 via-purple-500/5 to-transparent p-4 dark:border-purple-900/40">
+                <div className="flex items-center justify-between text-slate-500">
+                  <span className="text-[11px] font-black uppercase tracking-wider text-purple-700 dark:text-purple-300">New Registrations</span>
+                  <Users size={18} className="text-purple-600" />
+                </div>
+                <p className="mt-2 text-2xl font-black text-slate-900 dark:text-white">
+                  {liveActivityQuery.data?.todayOps?.today_new_patients ?? 0}
+                </p>
+                <p className="text-[10.5px] font-medium text-slate-400 mt-1">New dental files created today</p>
+              </div>
+            </div>
+
+            {/* Split Grid: Live Staff Audit Stream on Left, Staff Roster on Right */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Left Column: Live Staff Activity Feed (2 Cols) */}
+              <div className="lg:col-span-2 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3 dark:border-slate-800">
+                  <div>
+                    <h3 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2">
+                      <Activity size={16} className="text-[#0a7f8b] animate-pulse" />
+                      Live Staff Activity Stream ("Who Did What?")
+                    </h3>
+                    <p className="text-xs text-slate-400">
+                      Real-time chronological ledger of all clinical, reception, and financial actions.
+                    </p>
+                  </div>
+                  <div className="relative min-w-[200px]">
+                    <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      value={activitySearch}
+                      onChange={(e) => setActivitySearch(e.target.value)}
+                      placeholder="Filter staff or action..."
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 pl-8 pr-3 py-1.5 text-xs font-semibold focus:border-[#0a7f8b] focus:outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white"
+                    />
+                  </div>
+                </div>
+
+                {/* Audit Stream List */}
+                <div className="space-y-2 max-h-[560px] overflow-y-auto pr-1">
+                  {(liveActivityQuery.data?.recentActivity || [])
+                    .filter((a) => {
+                      if (!activitySearch.trim()) return true;
+                      const q = activitySearch.toLowerCase();
+                      return (
+                        (a.username || '').toLowerCase().includes(q) ||
+                        (a.action || '').toLowerCase().includes(q) ||
+                        (a.entity_type || '').toLowerCase().includes(q)
+                      );
+                    })
+                    .map((act) => {
+                      const isDanger = /delete|void|cancel|lock|remove/.test(act.action);
+                      const isSuccess = /create|collect|approve|paid|complete/.test(act.action);
+
+                      return (
+                        <div
+                          key={act.id}
+                          className="flex items-start justify-between gap-3 rounded-2xl border border-slate-200/80 bg-white p-3.5 shadow-2xs hover:border-[#0a7f8b] transition dark:bg-slate-850 dark:border-slate-800"
+                        >
+                          <div className="flex items-start gap-3">
+                            <div className={`mt-0.5 flex h-8 w-8 items-center justify-center rounded-xl text-xs font-black ${
+                              isDanger
+                                ? 'bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/60 dark:text-rose-300'
+                                : isSuccess
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300'
+                                : 'bg-teal-50 text-[#0a7f8b] border border-teal-200 dark:bg-teal-950/60 dark:text-teal-300'
+                            }`}>
+                              {act.username?.slice(0, 2).toUpperCase() || 'ST'}
+                            </div>
+                            <div className="space-y-0.5">
+                              <p className="text-xs font-bold text-slate-900 dark:text-white">
+                                <span className="font-black text-slate-800 dark:text-slate-100">@{act.username || 'system'}</span>{' '}
+                                <span className={`inline-block rounded-md px-1.5 py-0.5 text-[10px] font-black uppercase ${
+                                  isDanger ? 'bg-rose-100 text-rose-800' : isSuccess ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'
+                                }`}>
+                                  {act.action}
+                                </span>
+                              </p>
+                              <p className="text-[11px] text-slate-500 font-mono">
+                                Target: {act.entity_type} {act.entity_id ? `(#${String(act.entity_id).slice(0, 8)})` : ''}
+                              </p>
+                              {act.details && (
+                                <p className="text-[10.5px] text-slate-400 truncate max-w-md">
+                                  {typeof act.details === 'object' ? JSON.stringify(act.details) : act.details}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="text-right shrink-0">
+                            <span className="block text-[10.5px] font-bold text-slate-500 tabular-nums">
+                              {formatDateTime(act.created_at)}
+                            </span>
+                            {act.ip && (
+                              <span className="block text-[9.5px] font-mono text-slate-400">
+                                IP: {act.ip}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                  {(liveActivityQuery.data?.recentActivity || []).length === 0 && (
+                    <div className="rounded-2xl border border-dashed border-slate-200 p-8 text-center text-xs text-slate-400">
+                      No activity events logged yet today.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Right Column: Staff Roster & Connected Workstations */}
+              <div className="space-y-5">
+                {/* Staff Roster Box */}
+                <div className="rounded-3xl border border-slate-200/80 bg-white p-4 shadow-2xs dark:bg-slate-850 dark:border-slate-800 space-y-3">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-2.5 dark:border-slate-800">
+                    <h4 className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-white flex items-center gap-1.5">
+                      <UserCheck size={14} className="text-[#0a7f8b]" />
+                      Clinic Staff Roster
+                    </h4>
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600">
+                      {(liveActivityQuery.data?.staff || []).length} Users
+                    </span>
+                  </div>
+
+                  <div className="space-y-2 max-h-[260px] overflow-y-auto pr-1">
+                    {(liveActivityQuery.data?.staff || []).map((u) => (
+                      <div
+                        key={u.id}
+                        className="flex items-center justify-between rounded-xl bg-slate-50/80 p-2.5 text-xs dark:bg-slate-800/50"
+                      >
+                        <div className="space-y-0.5">
+                          <p className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                            {u.full_name}
+                            <span className={`h-1.5 w-1.5 rounded-full ${u.is_active ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                          </p>
+                          <p className="text-[10.5px] text-slate-400">
+                            @{u.username} · <span className="font-semibold text-[#0a7f8b]">{u.role_name || u.role_code}</span>
+                          </p>
+                        </div>
+                        <span className="rounded-md bg-white px-2 py-0.5 text-[10px] font-mono text-slate-400 border border-slate-200/60 dark:bg-slate-700">
+                          {u.last_login_at ? formatDate(u.last_login_at) : 'Active'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Workstations Box */}
+                <div className="rounded-3xl border border-slate-200/80 bg-white p-4 shadow-2xs dark:bg-slate-850 dark:border-slate-800 space-y-3">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-2.5 dark:border-slate-800">
+                    <h4 className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-white flex items-center gap-1.5">
+                      <Laptop size={14} className="text-[#0a7f8b]" />
+                      Active Systems &amp; Workstations
+                    </h4>
+                    <span className="rounded-full bg-teal-50 px-2 py-0.5 text-[10px] font-bold text-[#0a7f8b]">
+                      {(liveActivityQuery.data?.workstations || []).length} Connected
+                    </span>
+                  </div>
+
+                  <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+                    {(liveActivityQuery.data?.workstations || []).map((w) => (
+                      <div
+                        key={w.id}
+                        className="flex items-center justify-between rounded-xl bg-slate-50/80 p-2.5 text-xs dark:bg-slate-800/50"
+                      >
+                        <div className="space-y-0.5">
+                          <p className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                            <Monitor size={12} className="text-[#0a7f8b]" />
+                            {w.device_name || 'Clinic Workstation'}
+                          </p>
+                          <p className="text-[10px] font-mono text-slate-400">
+                            OS: {w.os_platform || 'Windows'} · Seen: {formatDateTime(w.last_seen_at)}
+                          </p>
+                        </div>
+                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                          Linked
+                        </span>
+                      </div>
+                    ))}
+
+                    {(liveActivityQuery.data?.workstations || []).length === 0 && (
+                      <div className="py-4 text-center text-xs text-slate-400">
+                        Primary browser active.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : activeTab === 'clinics' ? (
           <>
             {/* Filter and Search Bar */}
             <div className="flex flex-wrap items-center justify-between gap-3">

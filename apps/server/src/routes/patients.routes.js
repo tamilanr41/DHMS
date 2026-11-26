@@ -849,10 +849,19 @@ router.post('/:id/photos', requirePermission('patients.documents'), uploadClinic
   const notes = req.body.notes ? String(req.body.notes).trim().slice(0, 500) : null;
 
   const photo = await withTransaction(async (client) => {
+    // Ensure file_data column exists on documents table
+    await client.query('ALTER TABLE documents ADD COLUMN IF NOT EXISTS file_data text').catch(() => {});
+
+    let fileData = null;
+    try {
+      const mime = req.file.mimetype || 'image/jpeg';
+      fileData = `data:${mime};base64,${fs.readFileSync(req.file.path).toString('base64')}`;
+    } catch {}
+
     const { rows: docRows } = await client.query(
-      `INSERT INTO documents (patient_id, file_name, stored_name, mime_type, size_bytes, category, notes, uploaded_by)
-       VALUES ($1,$2,$3,$4,$5,'clinical_photo',$6,$7) RETURNING id`,
-      [id, req.file.originalname.slice(0, 255), req.file.filename, req.file.mimetype, req.file.size, notes, req.user.id]
+      `INSERT INTO documents (patient_id, file_name, stored_name, mime_type, size_bytes, category, notes, uploaded_by, file_data)
+       VALUES ($1,$2,$3,$4,$5,'clinical_photo',$6,$7,$8) RETURNING id`,
+      [id, req.file.originalname.slice(0, 255), req.file.filename, req.file.mimetype, req.file.size, notes, req.user.id, fileData]
     );
     const { rows } = await client.query(
       `INSERT INTO clinical_photos (patient_id, document_id, tooth_number, photo_type, taken_at, notes, created_by)
@@ -870,28 +879,58 @@ router.get('/:id/photos/:photoId/file', requireAnyPermission('patients.documents
   const id = requireId(req.params.id, 'Patient');
   const photoId = requireId(req.params.photoId, 'Clinical photo');
   const { rows } = await query(
-    `SELECT d.stored_name, d.mime_type, d.file_name FROM clinical_photos cp
+    `SELECT d.stored_name, d.mime_type, d.file_name, d.file_data FROM clinical_photos cp
      JOIN documents d ON d.id = cp.document_id WHERE cp.id = $1 AND cp.patient_id = $2`,
     [photoId, id]
   );
   const doc = rows[0];
   if (!doc) throw ApiError.notFound('Photo not found');
-  const filePath = path.join(DATA_DIRS.documents, path.basename(doc.stored_name));
-  if (!fs.existsSync(filePath)) {
-    const placeholderSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" width="400" height="300">
-      <rect width="400" height="300" fill="#f8fafc"/>
-      <rect x="20" y="20" width="360" height="260" rx="16" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="2" stroke-dasharray="6 6"/>
-      <circle cx="200" cy="120" r="40" fill="#e2e8f0"/>
-      <path d="M190 110 C190 100, 210 100, 210 110 C210 125, 205 135, 200 145 C195 135, 190 125, 190 110 Z" fill="#94a3b8"/>
-      <text x="200" y="195" font-family="system-ui, sans-serif" font-size="14" font-weight="600" fill="#475569" text-anchor="middle">Clinical Photo</text>
-      <text x="200" y="215" font-family="system-ui, sans-serif" font-size="11" fill="#94a3b8" text-anchor="middle">Image stored on local clinic workstation</text>
-    </svg>`;
+
+  // 1. If stored in PostgreSQL as Base64 (Render cloud persistent)
+  if (doc.file_data && typeof doc.file_data === 'string' && doc.file_data.includes(',')) {
+    const parts = doc.file_data.split(',');
+    const mime = parts[0].match(/:(.*?);/)?.[1] || doc.mime_type || 'image/jpeg';
+    const buffer = Buffer.from(parts[1], 'base64');
     res.setHeader('Cache-Control', 'public, max-age=86400');
-    return res.type('image/svg+xml').send(placeholderSvg);
+    return res.type(mime).send(buffer);
   }
-  res.setHeader('Cache-Control', 'private, max-age=300');
-  res.type(doc.mime_type);
-  res.sendFile(filePath);
+
+  // 2. Check all possible disk paths (both DATA_DIRS.photos AND DATA_DIRS.documents)
+  const filename = path.basename(doc.stored_name);
+  const candidatePaths = [
+    path.join(DATA_DIRS.photos, filename),
+    path.join(DATA_DIRS.documents, filename),
+    path.resolve('data/photos', filename),
+    path.resolve('data/documents', filename),
+    path.resolve('release/server/ZhanX-DentalCare-Server-1.0.0/data/photos', filename),
+    path.resolve('release/server/ZhanX-DentalCare-Server-1.0.0/data/documents', filename)
+  ];
+
+  const foundPath = candidatePaths.find((p) => fs.existsSync(p));
+  if (foundPath) {
+    // Opportunistically persist to DB so next container restart will serve directly from DB
+    try {
+      const mime = doc.mime_type || 'image/jpeg';
+      const b64 = `data:${mime};base64,${fs.readFileSync(foundPath).toString('base64')}`;
+      query('UPDATE documents SET file_data = $1 WHERE stored_name = $2', [b64, doc.stored_name]).catch(() => {});
+    } catch {}
+
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.type(doc.mime_type || 'image/jpeg');
+    return res.sendFile(foundPath);
+  }
+
+  // 3. Fallback placeholder
+  const placeholderSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" width="400" height="300">
+    <rect width="400" height="300" fill="#f8fafc"/>
+    <rect x="20" y="20" width="360" height="260" rx="16" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="2" stroke-dasharray="6 6"/>
+    <circle cx="200" cy="120" r="40" fill="#e2e8f0"/>
+    <path d="M190 110 C190 100, 210 100, 210 110 C210 125, 205 135, 200 145 C195 135, 190 125, 190 110 Z" fill="#94a3b8"/>
+    <text x="200" y="195" font-family="system-ui, sans-serif" font-size="14" font-weight="600" fill="#475569" text-anchor="middle">Clinical Photo</text>
+    <text x="200" y="215" font-family="system-ui, sans-serif" font-size="11" fill="#94a3b8" text-anchor="middle">Image stored on local clinic workstation</text>
+  </svg>`;
+  res.setHeader('Cache-Control', 'public, max-age=86400');
+  return res.type('image/svg+xml').send(placeholderSvg);
 }));
 
 router.delete('/:id/photos/:photoId', requirePermission('patients.documents'), asyncHandler(async (req, res) => {

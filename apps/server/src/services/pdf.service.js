@@ -27,6 +27,7 @@ function fmtDateTime(value) {
 }
 
 function brandingPath(clinic, kind) {
+  if (!clinic) return null;
   const fileName = kind === 'logo' ? clinic.logoPath : clinic.dentistSignaturePath;
   if (!fileName) return null;
   const p = path.join(DATA_DIRS.branding, path.basename(fileName));
@@ -39,6 +40,7 @@ function newDoc(orientation = 'portrait') {
 }
 
 function clinicHeader(doc, clinic, title, subtitle) {
+  clinic = clinic || {};
   const left = PAGE.margin;
   const right = doc.page.width - PAGE.margin;
   let textLeft = left;
@@ -71,7 +73,8 @@ function clinicHeader(doc, clinic, title, subtitle) {
   return 140;
 }
 
-function reportHeader(doc, clinic, title, subtitle, generatedBy, generatedAt) {
+function reportHeader(doc, clinic = {}, title, subtitle, generatedBy, generatedAt) {
+  clinic = clinic || {};
   const left = PAGE.margin;
   const right = doc.page.width - PAGE.margin;
   const badgeWidth = Math.min(270, (right - left) * 0.46);
@@ -136,7 +139,8 @@ function reportHeader(doc, clinic, title, subtitle, generatedBy, generatedAt) {
   return ruleY + 8;
 }
 
-function footerOnEveryPage(doc, clinic) {
+function footerOnEveryPage(doc, clinic = {}) {
+  clinic = clinic || {};
   const range = doc.bufferedPageRange();
   for (let i = 0; i < range.count; i++) {
     doc.switchToPage(range.start + i);

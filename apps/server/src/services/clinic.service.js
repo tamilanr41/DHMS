@@ -1,8 +1,23 @@
 import { query } from '../database/db.js';
 
 export async function getClinic() {
-  const { rows } = await query('SELECT * FROM clinic_settings WHERE id = 1');
-  return mapClinic(rows[0]);
+  const { rows } = await query('SELECT * FROM clinic_settings ORDER BY id ASC LIMIT 1');
+  if (rows[0]) return mapClinic(rows[0]);
+  return {
+    id: 1,
+    clinicName: 'ZhanX DentalCare',
+    address: '',
+    phone: '',
+    email: '',
+    website: '',
+    dentistName: '',
+    dentistQualification: '',
+    dentistRegistrationNo: '',
+    dentistContact: '',
+    currency: 'INR',
+    receiptFooter: 'Thank you for choosing our clinic.',
+    prescriptionFooter: 'Take medications as directed. Keep out of reach of children.'
+  };
 }
 
 export function mapClinic(r) {

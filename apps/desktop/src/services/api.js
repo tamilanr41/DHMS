@@ -111,10 +111,24 @@ export const api = {
     if (res.status === 401) {
       await refreshAccessToken();
       const retryRes = await rawFetch(path);
-      if (!retryRes.ok) throw new ApiError(retryRes.status, null);
+      if (!retryRes.ok) {
+        let errMsg = `Request failed (${retryRes.status})`;
+        try {
+          const errJson = await retryRes.json();
+          if (errJson?.error?.message) errMsg = errJson.error.message;
+        } catch {}
+        throw new ApiError(retryRes.status, { message: errMsg });
+      }
       return retryRes.blob();
     }
-    if (!res.ok) throw new ApiError(res.status, null);
+    if (!res.ok) {
+      let errMsg = `Request failed (${res.status})`;
+      try {
+        const errJson = await res.json();
+        if (errJson?.error?.message) errMsg = errJson.error.message;
+      } catch {}
+      throw new ApiError(res.status, { message: errMsg });
+    }
     return res.blob();
   }
 };

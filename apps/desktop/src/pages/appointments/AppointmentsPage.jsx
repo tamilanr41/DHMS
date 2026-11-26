@@ -1439,12 +1439,20 @@ function WeekBoard({ weekStart, rows, loading, error, onRetry, onOpenDay, onOpen
 
 function MonthCalendar({ date, rows, loading, error, onRetry, onOpenDay, onOpenAppointment, canCreate }) {
   const today = todayISO();
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState(date || today);
   const monthStart = monthStartOf(date);
   const gridStart = mondayOf(monthStart);
   const leading = (parseISO(monthStart).getDay() + 6) % 7;
   const totalDays = parseISO(monthEndOf(date)).getDate();
   const cellCount = Math.ceil((leading + totalDays) / 7) * 7;
   const days = Array.from({ length: cellCount }, (_, i) => addDaysISO(gridStart, i));
+
+  // Sync selectedCalendarDate if month changes
+  useEffect(() => {
+    if (selectedCalendarDate.slice(0, 7) !== date.slice(0, 7)) {
+      setSelectedCalendarDate(date);
+    }
+  }, [date, selectedCalendarDate]);
 
   const byDay = useMemo(() => {
     const map = new Map(days.map((d) => [d, []]));
@@ -1454,12 +1462,25 @@ function MonthCalendar({ date, rows, loading, error, onRetry, onOpenDay, onOpenA
     return map;
   }, [rows, date]);
 
+  // Selected Day appointments
+  const selectedDayAppointments = useMemo(() => {
+    return (byDay.get(selectedCalendarDate) || []).slice().sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''));
+  }, [byDay, selectedCalendarDate]);
+
+  // Upcoming appointments from today forward in this month
+  const upcomingMonthAppointments = useMemo(() => {
+    return rows
+      .filter((r) => r.appointmentDate >= today && !['completed', 'cancelled', 'no_show'].includes(r.status))
+      .slice()
+      .sort((a, b) => `${a.appointmentDate} ${a.startTime}`.localeCompare(`${b.appointmentDate} ${b.startTime}`));
+  }, [rows, today]);
+
   if (loading) {
     return (
       <div className="rounded-3xl border border-slate-200/80 bg-white p-12 text-center dark:border-slate-800 dark:bg-slate-900">
         <div className="flex flex-col items-center gap-2 text-xs text-slate-500">
           <Spinner size={24} />
-          <span>Loading monthly schedule…</span>
+          <span>Loading monthly calendar schedule…</span>
         </div>
       </div>
     );
@@ -1467,78 +1488,271 @@ function MonthCalendar({ date, rows, loading, error, onRetry, onOpenDay, onOpenA
   if (error) return <div className="rounded-3xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900"><ErrorState error={error} onRetry={onRetry} /></div>;
 
   return (
-    <div className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
-      <div className="grid grid-cols-7 border-b border-slate-100 bg-slate-50/70 dark:border-slate-800 dark:bg-slate-800/40">
-        {DAY_NAMES.map((d) => (
-          <div key={d} className="px-3 py-2.5 text-center text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">
-            {d}
+    <div className="grid grid-cols-1 gap-6 xl:grid-cols-12 items-start">
+      {/* ── Left Column: Interactive Month Grid (8 or 9 cols) ── */}
+      <div className="xl:col-span-8 2xl:col-span-9 overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        {/* Month Header Banner with Quick Stats */}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-gradient-to-r from-teal-50/70 via-white to-cyan-50/50 p-4 dark:border-slate-800 dark:from-slate-900 dark:via-slate-900 dark:to-slate-900">
+          <div className="flex items-center gap-3">
+            <span className="flex size-10 items-center justify-center rounded-2xl bg-gradient-to-br from-[#0a7f8b] to-[#14b8c8] text-white shadow-md">
+              <CalendarRange size={20} />
+            </span>
+            <div>
+              <h2 className="text-base font-black text-slate-900 dark:text-white">
+                {formatMonthLabel(date)} Calendar
+              </h2>
+              <p className="text-xs text-slate-400">
+                {rows.length} total scheduled visits · Click any day to preview schedule
+              </p>
+            </div>
           </div>
-        ))}
-      </div>
-      <div className="grid grid-cols-7">
-        {days.map((d, idx) => {
-          const list = byDay.get(d) || [];
-          const outside = d.slice(0, 7) !== monthStart.slice(0, 7);
-          const active = d === today;
-          return (
-            <div
-              key={d}
-              className={`min-h-[120px] border-b border-r border-slate-100 p-2 transition-colors dark:border-slate-800 ${
-                outside ? 'bg-slate-50/40 dark:bg-slate-950/30' : 'bg-white dark:bg-slate-900'
-              } ${idx % 7 === 6 ? 'border-r-0' : ''}`}
-            >
-              <div className="mb-1.5 flex items-center justify-between">
-                <button
-                  type="button"
-                  onClick={() => onOpenDay(d)}
-                  className={`flex h-7 min-w-7 items-center justify-center rounded-xl px-1.5 text-xs font-black transition-colors ${
-                    active ? 'bg-[#0a7f8b] text-white shadow-xs' : outside ? 'text-slate-400 hover:bg-slate-200/60' : 'text-slate-700 hover:bg-teal-50 hover:text-[#0a7f8b] dark:text-slate-200'
-                  }`}
-                  title={`Open ${formatDate(d)}`}
-                >
-                  {formatDayNumber(d)}
-                </button>
-                <div className="flex items-center gap-1">
-                  {list.length > 0 && <span className="text-[10px] font-black text-slate-400">{list.length}</span>}
-                  {canCreate && (
-                    <button type="button" aria-label={`Add appointment on ${formatDate(d)}`} onClick={() => onOpenDay(d)} className="rounded p-1 text-slate-300 hover:bg-teal-50 hover:text-[#0a7f8b]">
-                      <Plus size={12} />
+
+          <div className="flex items-center gap-2">
+            <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border border-emerald-200/60">
+              {upcomingMonthAppointments.length} Upcoming in Month
+            </span>
+            {canCreate && (
+              <button
+                type="button"
+                onClick={() => onOpenDay(selectedCalendarDate)}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-[#0a7f8b] px-3 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-[#086771] transition"
+              >
+                <Plus size={14} />
+                <span>Book Slot</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* 7 Weekday Headers */}
+        <div className="grid grid-cols-7 border-b border-slate-100 bg-slate-50/70 dark:border-slate-800 dark:bg-slate-800/40">
+          {DAY_NAMES.map((d) => (
+            <div key={d} className="px-2 py-2.5 text-center text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              {d}
+            </div>
+          ))}
+        </div>
+
+        {/* Calendar Grid Cells */}
+        <div className="grid grid-cols-7">
+          {days.map((d, idx) => {
+            const list = byDay.get(d) || [];
+            const outside = d.slice(0, 7) !== monthStart.slice(0, 7);
+            const isToday = d === today;
+            const isSelected = d === selectedCalendarDate;
+            const hasAppointments = list.length > 0;
+
+            return (
+              <div
+                key={d}
+                onClick={() => setSelectedCalendarDate(d)}
+                className={`min-h-[115px] border-b border-r border-slate-100 p-2 transition-all cursor-pointer dark:border-slate-800 ${
+                  outside
+                    ? 'bg-slate-50/40 opacity-60 dark:bg-slate-950/30'
+                    : isSelected
+                    ? 'bg-teal-50/60 dark:bg-teal-950/30 ring-2 ring-inset ring-[#0a7f8b]/60'
+                    : 'bg-white hover:bg-slate-50/70 dark:bg-slate-900 dark:hover:bg-slate-850'
+                } ${idx % 7 === 6 ? 'border-r-0' : ''}`}
+              >
+                {/* Cell Header: Day Number and Count Badge */}
+                <div className="mb-1.5 flex items-center justify-between">
+                  <span
+                    className={`flex h-7 min-w-7 items-center justify-center rounded-xl px-1.5 text-xs font-black transition-colors ${
+                      isToday
+                        ? 'bg-[#0a7f8b] text-white shadow-xs'
+                        : isSelected
+                        ? 'bg-teal-700 text-white shadow-xs'
+                        : outside
+                        ? 'text-slate-400'
+                        : 'text-slate-700 dark:text-slate-200'
+                    }`}
+                  >
+                    {formatDayNumber(d)}
+                  </span>
+
+                  <div className="flex items-center gap-1">
+                    {hasAppointments && (
+                      <span className="flex size-5 items-center justify-center rounded-full bg-teal-100 text-[10px] font-black text-teal-800 dark:bg-teal-900/60 dark:text-teal-300">
+                        {list.length}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Appointment Chips in Cell */}
+                <div className="space-y-1">
+                  {list.slice(0, 2).map((r) => (
+                    <button
+                      key={r.id}
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenAppointment(r);
+                      }}
+                      className="group flex w-full items-center gap-1 truncate rounded-lg border border-slate-100 bg-white/90 px-1.5 py-1 text-left text-[10.5px] font-semibold transition-all hover:border-[#0a7f8b] hover:shadow-xs dark:border-slate-800 dark:bg-slate-850"
+                      style={{ borderLeft: `3px solid ${STATUS_COLOR[r.status] || '#94a3b8'}` }}
+                      title={`${r.patientName} (${formatTime(r.startTime)}) - ${humanize(r.status)}`}
+                    >
+                      <span className="shrink-0 font-mono font-bold text-slate-500 dark:text-slate-400 text-[10px]">
+                        {formatTime(r.startTime)}
+                      </span>
+                      <span className="truncate font-bold text-slate-800 dark:text-slate-200 group-hover:text-[#0a7f8b]">
+                        {r.patientName}
+                      </span>
+                    </button>
+                  ))}
+                  {list.length > 2 && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedCalendarDate(d);
+                      }}
+                      className="block w-full px-1 text-left text-[10px] font-black text-[#0a7f8b] hover:underline"
+                    >
+                      +{list.length - 2} more visits
                     </button>
                   )}
                 </div>
               </div>
-              <div className="space-y-1">
-                {list.slice(0, 2).map((r) => (
+            );
+          })}
+        </div>
+
+        {/* Footer: Month Summary & Status Legend */}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 bg-slate-50/60 px-4 py-3 text-xs text-slate-500 font-semibold dark:border-slate-800 dark:bg-slate-800/40">
+          <span>{rows.length} total scheduled visits in {formatMonthLabel(date)}</span>
+          <div className="flex flex-wrap items-center gap-3">
+            {['scheduled', 'confirmed', 'checked_in', 'in_consultation', 'completed'].map((s) => (
+              <span key={s} className="inline-flex items-center gap-1.5">
+                <span className={`h-2 w-2 rounded-full ${STATUS_DOT[s]}`} />
+                {humanize(s)}
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Right Column: Selected Day Agenda & Upcoming Visits (4 or 3 cols) ── */}
+      <div className="xl:col-span-4 2xl:col-span-3 space-y-5">
+        {/* Selected Day Agenda Box */}
+        <div className="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
+            <div>
+              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                Selected Day Schedule
+              </span>
+              <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
+                {formatLongDate(selectedCalendarDate)}
+              </h3>
+            </div>
+            <button
+              type="button"
+              onClick={() => onOpenDay(selectedCalendarDate)}
+              className="rounded-xl border border-teal-200 bg-teal-50 px-2.5 py-1 text-xs font-bold text-teal-700 hover:bg-teal-100 transition"
+              title="Open Day Timeline View"
+            >
+              Day View →
+            </button>
+          </div>
+
+          <div className="mt-4">
+            {selectedDayAppointments.length === 0 ? (
+              <div className="py-8 text-center">
+                <CalendarDays size={28} className="mx-auto text-slate-300 dark:text-slate-600" />
+                <p className="mt-2 text-xs font-bold text-slate-700 dark:text-slate-200">
+                  No appointments on this date
+                </p>
+                <p className="text-[11px] text-slate-400">Click below to book a patient slot.</p>
+                {canCreate && (
                   <button
-                    key={r.id}
                     type="button"
-                    onClick={() => onOpenAppointment(r)}
-                    className="flex w-full items-center gap-1 truncate rounded-lg border border-slate-100 bg-white px-1.5 py-1 text-left text-[10px] font-semibold transition-colors hover:border-[#0a7f8b]/40 hover:bg-teal-50/40 dark:border-slate-800 dark:bg-slate-850"
-                    style={{ borderLeft: `2px solid ${STATUS_COLOR[r.status] || '#94a3b8'}` }}
+                    onClick={() => onOpenDay(selectedCalendarDate)}
+                    className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-teal-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-teal-700 transition"
                   >
-                    <span className="shrink-0 font-black tabular-nums text-slate-600 dark:text-slate-400">{formatTime(r.startTime)}</span>
-                    <span className="truncate text-slate-800 dark:text-slate-200 font-bold">{r.patientName}</span>
-                  </button>
-                ))}
-                {list.length > 2 && (
-                  <button type="button" onClick={() => onOpenDay(d)} className="w-full px-1 text-left text-[10px] font-black text-[#0a7f8b] hover:underline">
-                    +{list.length - 2} more visits
+                    <Plus size={14} />
+                    <span>Book on this date</span>
                   </button>
                 )}
               </div>
+            ) : (
+              <div className="space-y-2.5 max-h-[360px] overflow-y-auto pr-1 divide-y divide-slate-100 dark:divide-slate-800">
+                {selectedDayAppointments.map((apt) => (
+                  <div
+                    key={apt.id}
+                    onClick={() => onOpenAppointment(apt)}
+                    className="flex items-center justify-between pt-2.5 cursor-pointer rounded-xl p-2 transition hover:bg-slate-50 dark:hover:bg-slate-800"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="font-mono text-xs font-black text-teal-700 dark:text-teal-400 shrink-0">
+                        {formatTime(apt.startTime)}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="truncate text-xs font-bold text-slate-800 dark:text-white">
+                          {apt.patientName}
+                        </p>
+                        <p className="truncate text-[10.5px] text-slate-400">
+                          {apt.reason || 'General Consultation'} · Dr. {apt.dentistName || 'Sathish'}
+                        </p>
+                      </div>
+                    </div>
+                    <Badge status={apt.status} />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Upcoming Appointments this Month */}
+        <div className="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
+            <div>
+              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                Upcoming Queue
+              </span>
+              <h3 className="text-sm font-extrabold text-slate-900 dark:text-white">
+                Upcoming this Month ({upcomingMonthAppointments.length})
+              </h3>
             </div>
-          );
-        })}
-      </div>
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 bg-slate-50/50 px-4 py-3 text-xs text-slate-500 font-semibold dark:border-slate-800 dark:bg-slate-800/40">
-        <span>{rows.length} total appointments in {formatMonthLabel(date)}</span>
-        <div className="flex flex-wrap items-center gap-3">
-          {['scheduled', 'confirmed', 'checked_in', 'in_consultation', 'completed'].map((s) => (
-            <span key={s} className="inline-flex items-center gap-1.5">
-              <span className={`h-2 w-2 rounded-full ${STATUS_DOT[s]}`} />
-              {humanize(s)}
-            </span>
-          ))}
+            <Clock3 size={16} className="text-slate-400" />
+          </div>
+
+          <div className="mt-3 space-y-2.5 max-h-[320px] overflow-y-auto pr-1 divide-y divide-slate-100 dark:divide-slate-800">
+            {upcomingMonthAppointments.length === 0 ? (
+              <p className="py-6 text-center text-xs text-slate-400">
+                No future appointments scheduled for the rest of this month.
+              </p>
+            ) : (
+              upcomingMonthAppointments.slice(0, 10).map((apt) => (
+                <div
+                  key={apt.id}
+                  onClick={() => onOpenAppointment(apt)}
+                  className="flex items-center justify-between pt-2 cursor-pointer rounded-xl p-1.5 transition hover:bg-slate-50 dark:hover:bg-slate-800"
+                >
+                  <div className="min-w-0 flex items-center gap-2.5">
+                    <div className="rounded-lg bg-teal-50 px-2 py-1 text-center shrink-0 dark:bg-teal-950/50">
+                      <span className="block text-[9px] font-bold uppercase text-teal-700 dark:text-teal-300">
+                        {formatWeekday(apt.appointmentDate)}
+                      </span>
+                      <span className="block text-xs font-black text-teal-800 dark:text-teal-200">
+                        {formatDayNumber(apt.appointmentDate)}
+                      </span>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-xs font-bold text-slate-800 dark:text-white">
+                        {apt.patientName}
+                      </p>
+                      <p className="text-[10px] text-slate-400">
+                        {formatTime(apt.startTime)} · {apt.reason || 'Visit'}
+                      </p>
+                    </div>
+                  </div>
+                  <Badge status={apt.status} />
+                </div>
+              ))
+            )}
+          </div>
         </div>
       </div>
     </div>

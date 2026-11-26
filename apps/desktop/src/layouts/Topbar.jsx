@@ -373,14 +373,21 @@ function UserMenu() {
             <button
               type="button"
               onClick={() => { setOpen(false); navigate('/change-password'); }}
-              className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-semibold text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-700"
+              className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-semibold text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-700 cursor-pointer"
             >
               <KeyRound size={14} className="text-slate-400" /> Change password
             </button>
             <button
               type="button"
+              onClick={() => { setOpen(false); navigate('/super-admin'); }}
+              className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-semibold text-teal-600 hover:bg-teal-50 dark:text-teal-300 dark:hover:bg-teal-950/40 cursor-pointer"
+            >
+              <ShieldCheck size={14} className="text-[#0a7f8b]" /> Super Admin Console
+            </button>
+            <button
+              type="button"
               onClick={() => { setOpen(false); setConfirm(true); }}
-              className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-semibold text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/40"
+              className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-semibold text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/40 cursor-pointer"
             >
               <LogOut size={14} /> Sign out
             </button>

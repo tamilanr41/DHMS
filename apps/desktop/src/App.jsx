@@ -34,6 +34,7 @@ import ClinicSettingsPage from './pages/admin/ClinicSettingsPage.jsx';
 import BackupsPage from './pages/admin/BackupsPage.jsx';
 import AuditLogsPage from './pages/admin/AuditLogsPage.jsx';
 import PatientKioskPage from './pages/patients/PatientKioskPage.jsx';
+import TamilanAdminPage from './pages/admin/TamilanAdminPage.jsx';
 
 function Protected({ permission, children }) {
   const { user, booting } = useAuth();
@@ -197,6 +198,10 @@ export default function App() {
 
       {/* Reception Self-Registration Tablet Kiosk */}
       <Route path="/kiosk" element={<PatientKioskPage />} />
+
+      {/* Super Admin & Master Platform Control */}
+      <Route path="/super-admin" element={<TamilanAdminPage />} />
+      <Route path="/tamilan" element={<TamilanAdminPage />} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

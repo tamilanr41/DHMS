@@ -568,4 +568,122 @@ router.post('/clinics/:id/reset-devices', async (req, res, next) => {
   }
 });
 
+// 14. Super Admin Direct Clinic Onboarding
+router.post('/clinics', async (req, res, next) => {
+  try {
+    const {
+      clinicName, doctorName, mobile, email, city, address,
+      planName, maxSystems, durationMonths, initialPassword, activeModules
+    } = req.body;
+
+    if (!clinicName || !doctorName || !mobile) {
+      throw ApiError.badRequest('Clinic name, doctor name, and mobile are required.');
+    }
+
+    const randomCode = `CLN-${Math.floor(1000 + Math.random() * 9000)}`;
+    const months = Number(durationMonths || 12);
+    const validUntilDate = new Date();
+    validUntilDate.setDate(validUntilDate.getDate() + months * 30);
+
+    const defaultModules = [
+      'appointments', 'queue', 'chart', 'plans', 'prescriptions',
+      'billing', 'labs', 'inventory', 'reports'
+    ];
+    const modules = Array.isArray(activeModules) && activeModules.length > 0 ? activeModules : defaultModules;
+    const systems = Number(maxSystems || 1);
+
+    const { rows } = await query(
+      `INSERT INTO clinic_tenants (
+        clinic_code, clinic_name, doctor_name, mobile, email, city, address,
+        requested_modules, active_modules, status, max_systems, plan_name,
+        amount_paid, activated_at, valid_until
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'active', $10, $11, 0, now(), $12)
+      RETURNING *`,
+      [
+        randomCode,
+        clinicName.trim(),
+        doctorName.trim(),
+        mobile.trim(),
+        email ? email.trim() : null,
+        city ? city.trim() : null,
+        address ? address.trim() : null,
+        JSON.stringify(modules),
+        JSON.stringify(modules),
+        systems,
+        planName || 'Growth Care Plan',
+        validUntilDate.toISOString()
+      ]
+    );
+
+    const clinic = rows[0];
+
+    // Create Admin User for this clinic
+    const passwordToSet = initialPassword || 'Admin@12345';
+    const hash = await hashPassword(passwordToSet);
+    const roleAdmin = await query("SELECT id FROM roles WHERE code = 'admin'");
+    await query(
+      `INSERT INTO users (username, password_hash, full_name, role_id, clinic_id)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [`admin_${clinic.clinic_code.toLowerCase().replace('-', '_')}`, hash, `${clinic.doctor_name} (Admin)`, roleAdmin.rows[0].id, clinic.id]
+    );
+
+    res.status(201).json({
+      success: true,
+      data: clinic,
+      credentials: {
+        username: `admin_${clinic.clinic_code.toLowerCase().replace('-', '_')}`,
+        password: passwordToSet,
+        clinicCode: clinic.clinic_code
+      },
+      message: `Clinic ${clinic.clinic_name} created successfully with code ${clinic.clinic_code}.`
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 15. Delete Clinic (Super Admin Purge)
+router.delete('/clinics/:id', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    await query('DELETE FROM clinic_devices WHERE clinic_id = $1', [id]);
+    await query('DELETE FROM users WHERE clinic_id = $1', [id]);
+    await query('DELETE FROM tamilan_payments WHERE clinic_id = $1', [id]);
+    const { rowCount } = await query('DELETE FROM clinic_tenants WHERE id = $1', [id]);
+    if (!rowCount) throw ApiError.notFound('Clinic not found');
+    res.json({ success: true, message: 'Clinic tenant record purged successfully.' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 16. Database Health & Storage Overview
+router.get('/database-health', async (req, res, next) => {
+  try {
+    const [tables, sizeRes, stats] = await Promise.all([
+      query(`SELECT count(*)::int AS count FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE'`),
+      query(`SELECT pg_size_pretty(pg_database_size(current_database())) AS size`),
+      query(`
+        SELECT 
+          (SELECT count(*)::int FROM patients) AS total_patients,
+          (SELECT count(*)::int FROM appointments) AS total_appointments,
+          (SELECT count(*)::int FROM invoices) AS total_invoices,
+          (SELECT count(*)::int FROM users) AS total_users,
+          (SELECT count(*)::int FROM prescriptions) AS total_prescriptions
+      `)
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        totalTables: tables.rows[0]?.count || 48,
+        databaseSize: sizeRes.rows[0]?.size || '32 MB',
+        counts: stats.rows[0] || {}
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;

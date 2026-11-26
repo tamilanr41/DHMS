@@ -585,6 +585,16 @@ export default function LoginPage() {
             <br />
             Authorized personnel only. All access is logged and audited.
           </p>
+
+          <div className="mt-4 flex items-center justify-center">
+            <a
+              href="/super-admin"
+              className="inline-flex items-center gap-1.5 rounded-full border border-teal-500/30 bg-teal-500/10 px-3.5 py-1 text-[11px] font-bold text-teal-300 hover:bg-teal-500/20 hover:text-white transition shadow-sm"
+            >
+              <ShieldCheck size={13} className="text-teal-400" />
+              Super Admin Console
+            </a>
+          </div>
         </div>
       </section>
 

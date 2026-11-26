@@ -227,7 +227,15 @@ export default function ConsultationAudioRecorder({
       drawVisualizer();
     } catch (err) {
       console.error('Microphone error:', err);
-      setPermissionError('Microphone access denied or not available. Please allow audio permission in browser.');
+      let errMsg = 'Microphone access denied or not available. Please allow microphone permission in your browser.';
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        errMsg = 'Microphone permission blocked. Please click the camera/lock icon in your browser address bar and choose "Allow Microphone".';
+      } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+        errMsg = 'No microphone device found. Please connect a headset or microphone and try again.';
+      } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+        errMsg = 'Microphone is already in use by another application (like Zoom, Teams, or Meet). Please close other apps and retry.';
+      }
+      setPermissionError(errMsg);
     }
   };
 
@@ -325,9 +333,21 @@ export default function ConsultationAudioRecorder({
       </div>
 
       {permissionError && (
-        <div className="mt-3 flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 p-2.5 text-xs text-rose-700">
-          <AlertCircle size={16} className="shrink-0" />
-          <span>{permissionError}</span>
+        <div className="mt-3 flex items-start gap-2.5 rounded-2xl border border-rose-200 bg-rose-50/90 p-3 text-xs text-rose-800 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-200">
+          <AlertCircle size={17} className="shrink-0 mt-0.5 text-rose-600" />
+          <div className="flex-1 space-y-1.5">
+            <p className="font-bold">{permissionError}</p>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={startRecording}
+                className="inline-flex items-center gap-1 rounded-lg bg-rose-600 hover:bg-rose-700 px-2.5 py-1 text-[11px] font-bold text-white shadow-xs transition"
+              >
+                <span>Retry Permission</span>
+              </button>
+              <span className="text-[10px] text-rose-500">Click the 🔒 icon next to your URL in the address bar</span>
+            </div>
+          </div>
         </div>
       )}
 

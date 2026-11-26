@@ -120,12 +120,19 @@ router.post('/signature', requirePermission('settings.manage'), uploadBrandingIm
 router.get('/files/:kind', asyncHandler(async (req, res) => {
   const kind = req.params.kind;
   if (!['logo', 'signature'].includes(kind)) throw ApiError.notFound();
+  const transparentGif = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
   const column = kind === 'logo' ? 'logo_path' : 'dentist_signature_path';
-  const { rows } = await query(`SELECT ${column} AS file_name FROM clinic_settings WHERE id = 1`);
+  const { rows } = await query(`SELECT ${column} AS file_name FROM clinic_settings ORDER BY id ASC LIMIT 1`);
   const fileName = rows[0]?.file_name;
-  if (!fileName) throw ApiError.notFound('No file uploaded');
+  if (!fileName) {
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    return res.type('image/gif').send(transparentGif);
+  }
   const filePath = path.join(DATA_DIRS.branding, path.basename(fileName));
-  if (!fs.existsSync(filePath)) throw ApiError.notFound('File missing on server');
+  if (!fs.existsSync(filePath)) {
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    return res.type('image/gif').send(transparentGif);
+  }
   res.sendFile(filePath);
 }));
 

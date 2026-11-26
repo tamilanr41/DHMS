@@ -355,7 +355,11 @@ router.get('/:id/photo', requirePermission('patients.view'), asyncHandler(async 
     path.resolve('release/server/ZhanX-DentalCare-Server-1.0.0/data/photos', filename)
   ];
   const found = candidates.find((p) => fs.existsSync(p));
-  if (!found) throw ApiError.notFound('Photo file missing on server');
+  if (!found) {
+    const defaultSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128"><circle cx="64" cy="64" r="64" fill="#E2E8F0"/><circle cx="64" cy="48" r="24" fill="#94A3B8"/><path d="M24 104 C24 84, 40 76, 64 76 C88 76, 104 84, 104 104 Z" fill="#94A3B8"/></svg>`;
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    return res.type('image/svg+xml').send(defaultSvg);
+  }
 
   // Auto-sync into DB for permanent persistence
   try {

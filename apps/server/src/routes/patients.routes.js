@@ -6,7 +6,7 @@ import { query, withTransaction } from '../database/db.js';
 import { validate, parsePagination, paginatedMeta, todayISO } from '../utils/validate.js';
 import { asyncHandler, ApiError } from '../utils/errors.js';
 import { formatIndian, toPaise, fromPaise } from '../utils/money.js';
-import { authenticate, requirePermission } from '../middleware/auth.js';
+import { authenticate, requirePermission, requireAnyPermission } from '../middleware/auth.js';
 import { requireId } from '../middleware/error.js';
 import { uploadDocument, uploadPatientPhoto, uploadClinicalPhoto, DATA_DIRS } from '../middleware/upload.js';
 import { logAudit } from '../services/audit.service.js';
@@ -329,7 +329,11 @@ router.get('/:id/photo', requirePermission('patients.view'), asyncHandler(async 
   const id = requireId(req.params.id, 'Patient');
   const { rows } = await query('SELECT photo_file, photo_data FROM patients WHERE id = $1', [id]);
   if (!rows[0]) throw ApiError.notFound('Patient not found');
-  if (!rows[0].photo_file && !rows[0].photo_data) throw ApiError.notFound('No profile photo on file');
+  if (!rows[0].photo_file && !rows[0].photo_data) {
+    const defaultSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128"><circle cx="64" cy="64" r="64" fill="#E2E8F0"/><circle cx="64" cy="48" r="24" fill="#94A3B8"/><path d="M24 104 C24 84, 40 76, 64 76 C88 76, 104 84, 104 104 Z" fill="#94A3B8"/></svg>`;
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    return res.type('image/svg+xml').send(defaultSvg);
+  }
 
   res.setHeader('Cache-Control', 'private, max-age=300');
 
@@ -414,7 +418,7 @@ router.delete('/:id/photo', requirePermission('patients.edit'), asyncHandler(asy
 }));
 
 /* ---------- medical history ---------- */
-router.get('/:id/medical-history', requirePermission('patients.medical.view'), asyncHandler(async (req, res) => {
+router.get('/:id/medical-history', requireAnyPermission('patients.medical.view', 'patients.view'), asyncHandler(async (req, res) => {
   const id = requireId(req.params.id, 'Patient');
   const current = await query(
     `SELECT h.*, u.full_name AS recorded_by_name FROM patient_medical_history h
@@ -500,7 +504,7 @@ router.get('/:id/timeline', requirePermission('patients.view'), asyncHandler(asy
   res.json({ data: rows });
 }));
 
-router.get('/:id/appointments', requirePermission('appointments.view'), asyncHandler(async (req, res) => {
+router.get('/:id/appointments', requireAnyPermission('appointments.view', 'patients.view'), asyncHandler(async (req, res) => {
   const id = requireId(req.params.id, 'Patient');
   const { rows } = await query(
     `SELECT a.*, u.full_name AS dentist_name
@@ -511,7 +515,7 @@ router.get('/:id/appointments', requirePermission('appointments.view'), asyncHan
   res.json({ data: rows });
 }));
 
-router.get('/:id/consultations', requirePermission('consultations.view'), asyncHandler(async (req, res) => {
+router.get('/:id/consultations', requireAnyPermission('consultations.view', 'patients.view'), asyncHandler(async (req, res) => {
   const id = requireId(req.params.id, 'Patient');
   const { rows } = await query(
     `SELECT c.*, u.full_name AS dentist_name
@@ -522,7 +526,7 @@ router.get('/:id/consultations', requirePermission('consultations.view'), asyncH
   res.json({ data: rows });
 }));
 
-router.get('/:id/prescriptions', requirePermission('prescriptions.view'), asyncHandler(async (req, res) => {
+router.get('/:id/prescriptions', requireAnyPermission('prescriptions.view', 'patients.view'), asyncHandler(async (req, res) => {
   const id = requireId(req.params.id, 'Patient');
   const { rows } = await query(
     `SELECT p.*, u.full_name AS dentist_name,
@@ -534,7 +538,7 @@ router.get('/:id/prescriptions', requirePermission('prescriptions.view'), asyncH
   res.json({ data: rows });
 }));
 
-router.get('/:id/invoices', requirePermission('invoices.view'), asyncHandler(async (req, res) => {
+router.get('/:id/invoices', requireAnyPermission('invoices.view', 'patients.view'), asyncHandler(async (req, res) => {
   const id = requireId(req.params.id, 'Patient');
   const { rows } = await query(
     `SELECT i.*, (SELECT count(*) FROM invoice_items ii WHERE ii.invoice_id = i.id)::int AS item_count
@@ -544,7 +548,7 @@ router.get('/:id/invoices', requirePermission('invoices.view'), asyncHandler(asy
   res.json({ data: rows });
 }));
 
-router.get('/:id/payments', requirePermission('payments.view'), asyncHandler(async (req, res) => {
+router.get('/:id/payments', requireAnyPermission('payments.view', 'patients.view'), asyncHandler(async (req, res) => {
   const id = requireId(req.params.id, 'Patient');
   const { rows } = await query(
     `SELECT p.*, i.invoice_no, u.full_name AS recorded_by_name
@@ -556,7 +560,7 @@ router.get('/:id/payments', requirePermission('payments.view'), asyncHandler(asy
 }));
 
 /* ---------- documents ---------- */
-router.get('/:id/documents', requirePermission('patients.documents'), asyncHandler(async (req, res) => {
+router.get('/:id/documents', requireAnyPermission('patients.documents', 'patients.view'), asyncHandler(async (req, res) => {
   const id = requireId(req.params.id, 'Patient');
   const { rows } = await query(
     `SELECT d.id, d.file_name, d.mime_type, d.size_bytes, d.category, d.notes, d.created_at, u.full_name AS uploaded_by_name
@@ -741,7 +745,7 @@ router.get('/:id/statement.pdf', requirePermission('patients.view'), asyncHandle
 }));
 
 /* ---------- patient communications ---------- */
-router.get('/:id/communications', requirePermission('patients.communications'), asyncHandler(async (req, res) => {
+router.get('/:id/communications', requireAnyPermission('patients.communications', 'patients.view'), asyncHandler(async (req, res) => {
   const id = requireId(req.params.id, 'Patient');
   const { rows } = await query(
     `SELECT c.*, u.full_name AS recorded_by_name, a.appointment_no
@@ -792,7 +796,7 @@ router.post('/:id/communications', requirePermission('patients.communications'),
 }));
 
 /* ---------- clinical photos ---------- */
-router.get('/:id/photos', requirePermission('patients.documents'), asyncHandler(async (req, res) => {
+router.get('/:id/photos', requireAnyPermission('patients.documents', 'patients.view'), asyncHandler(async (req, res) => {
   const id = requireId(req.params.id, 'Patient');
   const { rows } = await query(
     `SELECT cp.*, d.file_name, d.mime_type, d.size_bytes, d.stored_name, u.full_name AS created_by_name

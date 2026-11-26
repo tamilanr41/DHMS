@@ -91,7 +91,7 @@ router.post('/', requirePermission('prescriptions.manage'), asyncHandler(async (
     const { rows } = await client.query(
       `INSERT INTO prescriptions (prescription_no, patient_id, dentist_id, consultation_id, prescription_date,
          allergies_noted, notes, follow_up_date, safety_flags, safety_override_reason, created_by)
-       VALUES ($1,$2,$3,$4,COALESCE($5::date, CURRENT_DATE),$6,$7,$8,$9) RETURNING *`,
+       VALUES ($1,$2,$3,$4,COALESCE($5::date, CURRENT_DATE),$6,$7,$8,$9,$10,$11) RETURNING *`,
       [no, body.patientId, dentistId, body.consultationId || null, body.prescriptionDate || null, body.allergiesNoted || null, body.notes || null, body.followUpDate || null, JSON.stringify(safety.flags), body.safetyOverrideReason || null, req.user.id]
     );
     for (let i = 0; i < body.items.length; i++) {

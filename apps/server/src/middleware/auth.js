@@ -41,7 +41,8 @@ export async function authenticate(req, res, next) {
 export function requirePermission(...codes) {
   return (req, res, next) => {
     if (!req.user) return next(ApiError.unauthorized());
-    const has = codes.every((c) => req.user.permissions.includes(c));
+    if (req.user.role === 'admin') return next();
+    const has = codes.every((c) => req.user.permissions?.includes(c));
     if (!has) return next(ApiError.forbidden());
     next();
   };
@@ -50,7 +51,8 @@ export function requirePermission(...codes) {
 export function requireAnyPermission(...codes) {
   return (req, res, next) => {
     if (!req.user) return next(ApiError.unauthorized());
-    const has = codes.some((c) => req.user.permissions.includes(c));
+    if (req.user.role === 'admin') return next();
+    const has = codes.some((c) => req.user.permissions?.includes(c));
     if (!has) return next(ApiError.forbidden());
     next();
   };

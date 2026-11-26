@@ -31,7 +31,7 @@ const planSchema = z.object({
   consultationId: z.string().uuid().nullable().optional(),
   dentistId: z.string().uuid().optional(),
   notes: z.string().trim().max(2000).nullable().optional(),
-  items: z.array(itemSchema).min(1, 'Add at least one procedure')
+  items: z.array(itemSchema).default([]).optional()
 });
 
 async function resolveItem(client, item) {
@@ -113,14 +113,20 @@ router.get('/', requirePermission('plans.view'), asyncHandler(async (req, res) =
 
 router.post('/', requirePermission('plans.manage'), asyncHandler(async (req, res) => {
   const body = validate(planSchema, req.body);
-  const dentistId = req.user.role === 'dentist' ? req.user.id : body.dentistId;
-  if (!dentistId) throw ApiError.badRequest('dentistId is required');
+  let dentistId = req.user.role === 'dentist' ? req.user.id : body.dentistId;
+  if (!dentistId) {
+    const defaultDentist = await query(
+      `SELECT u.id FROM users u JOIN roles r ON r.id = u.role_id WHERE r.code = 'dentist' AND u.is_active LIMIT 1`
+    );
+    dentistId = defaultDentist.rows[0]?.id || req.user.id;
+  }
   const patient = await query('SELECT 1 FROM patients WHERE id = $1', [body.patientId]);
   if (!patient.rowCount) throw ApiError.notFound('Patient not found');
 
+  const items = body.items || [];
   const plan = await withTransaction(async (client) => {
     const resolved = [];
-    for (const item of body.items) resolved.push(await resolveItem(client, item));
+    for (const item of items) resolved.push(await resolveItem(client, item));
     const { rows: seq } = await client.query(`SELECT nextval('seq_plan') AS n`);
     const planNo = `TP-${String(seq[0].n).padStart(6, '0')}`;
     const { rows } = await client.query(
@@ -129,8 +135,8 @@ router.post('/', requirePermission('plans.manage'), asyncHandler(async (req, res
       [planNo, body.patientId, body.consultationId || null, dentistId, body.notes || null, req.user.id]
     );
     const planId = rows[0].id;
-    for (let i = 0; i < body.items.length; i++) {
-      const item = body.items[i];
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
       const r = resolved[i];
       await client.query(
         `INSERT INTO treatment_plan_items (plan_id, tooth_number, treatment_id, treatment_name, description, quantity, unit_price, discount, total, sort_order, phase)
@@ -141,7 +147,7 @@ router.post('/', requirePermission('plans.manage'), asyncHandler(async (req, res
     return rows[0];
   });
 
-  await logAudit(null, req, { action: 'plan.created', entityType: 'treatment_plan', entityId: plan.id, details: { planNo: plan.plan_no, patientId: body.patientId, items: body.items.length } });
+  await logAudit(null, req, { action: 'plan.created', entityType: 'treatment_plan', entityId: plan.id, details: { planNo: plan.plan_no, patientId: body.patientId, items: items.length } });
   res.status(201).json({ data: await fetchPlan(plan.id) });
 }));
 

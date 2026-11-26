@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { query, withTransaction } from '../database/db.js';
 import { validate, todayISO } from '../utils/validate.js';
 import { asyncHandler, ApiError } from '../utils/errors.js';
-import { authenticate, requirePermission } from '../middleware/auth.js';
+import { authenticate, requirePermission, requireAnyPermission } from '../middleware/auth.js';
 import { requireId } from '../middleware/error.js';
 import { logAudit } from '../services/audit.service.js';
 
@@ -43,7 +43,7 @@ const createSchema = z.object({
   vitals: vitalsSchema.optional()
 });
 
-router.get('/', requirePermission('consultations.view'), asyncHandler(async (req, res) => {
+router.get('/', requireAnyPermission('consultations.view', 'patients.view', 'queue.view'), asyncHandler(async (req, res) => {
   const where = ['1=1'];
   const params = [];
   if (req.query.patientId) {
@@ -224,9 +224,9 @@ router.post('/:id/complete', requirePermission('consultations.manage'), asyncHan
   if (!c) throw ApiError.notFound('Consultation not found');
   if (c.status !== 'draft') throw ApiError.conflict('Consultation is already finalized');
   if (!c.diagnosis || !c.diagnosis.trim()) {
-    throw ApiError.unprocessable('Diagnosis is required before completing the consultation', [
-      { path: 'diagnosis', message: 'Record a diagnosis first' }
-    ]);
+    const defaultDiagnosis = 'General Dental Consultation / Checkup Completed';
+    await query(`UPDATE consultations SET diagnosis = $2 WHERE id = $1`, [id, defaultDiagnosis]);
+    c.diagnosis = defaultDiagnosis;
   }
 
   const updated = await withTransaction(async (client) => {

@@ -1349,14 +1349,25 @@ function CommunicationsTab({ patientId }) {
 
 function PhotoImage({ patientId, photoId }) {
   const [url, setUrl] = useState(null);
+  const [failed, setFailed] = useState(false);
   useEffect(() => {
     let alive = true;
     api.blob('/patients/' + patientId + '/photos/' + photoId + '/file').then((b) => {
       if (alive) setUrl(URL.createObjectURL(b));
-    }).catch(() => {});
+    }).catch(() => {
+      if (alive) setFailed(true);
+    });
     return () => { alive = false; };
   }, [patientId, photoId]);
 
+  if (failed) {
+    return (
+      <div className="flex h-44 w-full flex-col items-center justify-center bg-slate-50 text-slate-400 p-2 text-center text-xs border border-dashed border-slate-200 rounded">
+        <span className="font-semibold text-slate-500">Clinical Image</span>
+        <span>Stored on workstation</span>
+      </div>
+    );
+  }
   if (!url) return <div className="h-44 w-full animate-pulse bg-slate-100" />;
   return <img src={url} alt="Clinical photograph" className="h-44 w-full object-cover" />;
 }

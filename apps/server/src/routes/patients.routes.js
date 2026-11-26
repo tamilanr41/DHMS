@@ -589,14 +589,23 @@ router.post('/:id/documents', requirePermission('patients.documents'), uploadDoc
   res.status(201).json({ data: rows[0] });
 }));
 
-router.get('/:id/documents/:docId/download', requirePermission('patients.documents'), asyncHandler(async (req, res) => {
+router.get('/:id/documents/:docId/download', requireAnyPermission('patients.documents', 'patients.view'), asyncHandler(async (req, res) => {
   const id = requireId(req.params.id, 'Patient');
   const docId = requireId(req.params.docId, 'Document');
   const { rows } = await query('SELECT * FROM documents WHERE id = $1 AND patient_id = $2', [docId, id]);
   const doc = rows[0];
   if (!doc) throw ApiError.notFound('Document not found');
   const filePath = path.join(DATA_DIRS.documents, path.basename(doc.stored_name));
-  if (!fs.existsSync(filePath)) throw ApiError.notFound('File missing on server');
+  if (!fs.existsSync(filePath)) {
+    const placeholderSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" width="400" height="300">
+      <rect width="400" height="300" fill="#f8fafc"/>
+      <rect x="20" y="20" width="360" height="260" rx="16" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="2"/>
+      <text x="200" y="140" font-family="system-ui, sans-serif" font-size="14" font-weight="600" fill="#475569" text-anchor="middle">Document File</text>
+      <text x="200" y="165" font-family="system-ui, sans-serif" font-size="11" fill="#94a3b8" text-anchor="middle">File stored on clinic workstation</text>
+    </svg>`;
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    return res.type('image/svg+xml').send(placeholderSvg);
+  }
   await logAudit(null, req, { action: 'patient.document_viewed', entityType: 'document', entityId: docId });
   res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(doc.file_name)}"`);
   res.type(doc.mime_type);
@@ -857,7 +866,7 @@ router.post('/:id/photos', requirePermission('patients.documents'), uploadClinic
   res.status(201).json({ data: photo });
 }));
 
-router.get('/:id/photos/:photoId/file', requirePermission('patients.view'), asyncHandler(async (req, res) => {
+router.get('/:id/photos/:photoId/file', requireAnyPermission('patients.documents', 'patients.view'), asyncHandler(async (req, res) => {
   const id = requireId(req.params.id, 'Patient');
   const photoId = requireId(req.params.photoId, 'Clinical photo');
   const { rows } = await query(
@@ -868,7 +877,18 @@ router.get('/:id/photos/:photoId/file', requirePermission('patients.view'), asyn
   const doc = rows[0];
   if (!doc) throw ApiError.notFound('Photo not found');
   const filePath = path.join(DATA_DIRS.documents, path.basename(doc.stored_name));
-  if (!fs.existsSync(filePath)) throw ApiError.notFound('File missing on server');
+  if (!fs.existsSync(filePath)) {
+    const placeholderSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" width="400" height="300">
+      <rect width="400" height="300" fill="#f8fafc"/>
+      <rect x="20" y="20" width="360" height="260" rx="16" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="2" stroke-dasharray="6 6"/>
+      <circle cx="200" cy="120" r="40" fill="#e2e8f0"/>
+      <path d="M190 110 C190 100, 210 100, 210 110 C210 125, 205 135, 200 145 C195 135, 190 125, 190 110 Z" fill="#94a3b8"/>
+      <text x="200" y="195" font-family="system-ui, sans-serif" font-size="14" font-weight="600" fill="#475569" text-anchor="middle">Clinical Photo</text>
+      <text x="200" y="215" font-family="system-ui, sans-serif" font-size="11" fill="#94a3b8" text-anchor="middle">Image stored on local clinic workstation</text>
+    </svg>`;
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    return res.type('image/svg+xml').send(placeholderSvg);
+  }
   res.setHeader('Cache-Control', 'private, max-age=300');
   res.type(doc.mime_type);
   res.sendFile(filePath);

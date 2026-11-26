@@ -5,7 +5,7 @@ import {
   Phone, Mail, MapPin, CalendarPlus, Stethoscope, ReceiptText, Pencil, AlertTriangle, ShieldCheck,
   FileText, Upload, Download, Trash2, Plus, HeartPulse, Wallet, Grid3X3, ClipboardList, Pill, ChevronRight,
   IdCard, Briefcase, Droplet, UserRound, Copy, Check, MessageCircle, CalendarDays, Activity,
-  Clock, Landmark, FolderOpen, Image as ImageIcon, ShieldAlert, Sparkles, AlertCircle
+  Clock, Landmark, FolderOpen, Image as ImageIcon, ShieldAlert, Sparkles, AlertCircle, ZoomIn, X, Maximize2
 } from 'lucide-react';
 import { api, openBlob, downloadBlob, ApiError } from '../../services/api.js';
 import { useAuth } from '../../services/auth.jsx';
@@ -1347,7 +1347,7 @@ function CommunicationsTab({ patientId }) {
   );
 }
 
-function PhotoImage({ patientId, photoId }) {
+function PhotoImage({ patientId, photoId, onClick }) {
   const [url, setUrl] = useState(null);
   const [failed, setFailed] = useState(false);
   useEffect(() => {
@@ -1369,7 +1369,19 @@ function PhotoImage({ patientId, photoId }) {
     );
   }
   if (!url) return <div className="h-44 w-full animate-pulse bg-slate-100" />;
-  return <img src={url} alt="Clinical photograph" className="h-44 w-full object-cover" />;
+  return (
+    <div
+      className="relative group cursor-pointer overflow-hidden bg-slate-900"
+      onClick={() => onClick && onClick(url)}
+      title="Click to view full size"
+    >
+      <img src={url} alt="Clinical photograph" className="h-44 w-full object-cover group-hover:scale-105 transition-transform duration-300" />
+      <div className="absolute inset-0 bg-slate-900/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 text-white font-bold text-xs backdrop-blur-xs">
+        <ZoomIn size={16} />
+        <span>Click to View</span>
+      </div>
+    </div>
+  );
 }
 
 function PhotosTab({ patientId }) {
@@ -1380,6 +1392,7 @@ function PhotosTab({ patientId }) {
   const [toothNumber, setToothNumber] = useState('');
   const [takenAt, setTakenAt] = useState('');
   const [notes, setNotes] = useState('');
+  const [previewPhoto, setPreviewPhoto] = useState(null);
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['patient-photos', patientId],
@@ -1451,7 +1464,11 @@ function PhotosTab({ patientId }) {
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
         {(data || []).map((ph) => (
           <div key={ph.id} className="overflow-hidden rounded-2xl border border-line bg-white shadow-sm transition hover:shadow-md">
-            <PhotoImage patientId={patientId} photoId={ph.id} />
+            <PhotoImage
+              patientId={patientId}
+              photoId={ph.id}
+              onClick={(imgUrl) => setPreviewPhoto({ photo: ph, url: imgUrl })}
+            />
             <div className="p-3">
               <div className="flex items-center justify-between">
                 <Badge tone="info">{humanize(ph.photoType)}</Badge>
@@ -1459,7 +1476,7 @@ function PhotosTab({ patientId }) {
                   type="button"
                   title="Delete image"
                   onClick={() => { if (window.confirm('Delete this photo?')) deleteMut.mutate(ph.id); }}
-                  className="rounded p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50"
+                  className="rounded p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 cursor-pointer"
                 >
                   <Trash2 size={14} />
                 </button>
@@ -1473,6 +1490,71 @@ function PhotosTab({ patientId }) {
           </div>
         ))}
       </div>
+
+      {/* Lightbox / High-Res Clinical Image Viewer Modal */}
+      {previewPhoto && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-4 animate-fadeIn"
+          onClick={() => setPreviewPhoto(null)}
+        >
+          <div
+            className="relative max-w-4xl w-full max-h-[90vh] flex flex-col rounded-3xl bg-slate-900 border border-slate-700 shadow-2xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-900/90 text-white">
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-2">
+                  <Badge tone="info">{humanize(previewPhoto.photo?.photoType || 'intraoral')}</Badge>
+                  {previewPhoto.photo?.toothNumber && (
+                    <span className="text-xs font-black font-mono text-teal-400">
+                      Tooth #{previewPhoto.photo.toothNumber}
+                    </span>
+                  )}
+                  <span className="text-xs text-slate-400">
+                    · {formatDate(previewPhoto.photo?.takenAt || new Date())}
+                  </span>
+                </div>
+                {previewPhoto.photo?.notes && (
+                  <p className="text-xs text-slate-300 mt-1 max-w-xl truncate">
+                    {previewPhoto.photo.notes}
+                  </p>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                {previewPhoto.url && (
+                  <a
+                    href={previewPhoto.url}
+                    download={`clinical-photo-${previewPhoto.photo?.toothNumber || 'dental'}.jpg`}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 px-3 py-1.5 text-xs font-bold text-slate-200 transition border border-slate-700 cursor-pointer"
+                  >
+                    <Download size={13} /> Download
+                  </a>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setPreviewPhoto(null)}
+                  className="rounded-xl p-2 text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+
+            {/* Image Container with zoom view */}
+            <div className="flex-1 overflow-auto p-4 flex items-center justify-center bg-slate-950/60 min-h-[350px]">
+              <img
+                src={previewPhoto.url}
+                alt="Full size clinical photograph"
+                className="max-h-[70vh] w-auto max-w-full rounded-xl object-contain shadow-2xl"
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

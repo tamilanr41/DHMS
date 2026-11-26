@@ -47,6 +47,7 @@ import PatientAvatar from '../../components/PatientAvatar.jsx';
 import PatientTypeBadge from '../../components/PatientTypeBadge.jsx';
 import DoccureKpiCard from '../../components/ui/DoccureKpiCard.jsx';
 import heroTooth from '../../assets/dental/hero-tooth.svg';
+import { showDoctorNotification, sendDoctorWhatsAppAlert } from '../../services/soundAndNotification.js';
 
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -340,7 +341,40 @@ export default function AppointmentsPage() {
   });
 
   const runStatus = (appointment, next) => {
+    // 1. Trigger doctor native sound chime & notification on status change
+    if (['checked_in', 'waiting'].includes(next)) {
+      showDoctorNotification({
+        title: `🚨 Patient Arrived: ${appointment.patientName}`,
+        body: `Patient checked in for ${formatTime(appointment.startTime)} with Dr. ${appointment.dentistName || 'Dentist'}. Currently in waiting lounge.`
+      });
+    } else if (next === 'in_consultation') {
+      showDoctorNotification({
+        title: `💺 In Chair: ${appointment.patientName}`,
+        body: `Operatory consultation started for ${appointment.patientName}.`
+      });
+    }
+
     statusMutation.mutate({ id: appointment.id, status: next });
+  };
+
+  const notifyDoctorWhatsApp = (e, appointment, eventType = 'checked_in') => {
+    e.stopPropagation();
+    // Look up doctor phone or clinic doctor
+    const targetDoctor = (dentists.data || []).find((d) => d.id === appointment.dentistId);
+    const doctorPhone = targetDoctor?.phone || targetDoctor?.mobile || user?.phone;
+
+    if (!doctorPhone) {
+      toast.info('Please enter Doctor mobile number in Staff / Doctor master settings.');
+      return;
+    }
+
+    sendDoctorWhatsAppAlert(doctorPhone, {
+      doctorName: appointment.dentistName || targetDoctor?.fullName || user?.fullName,
+      patientName: appointment.patientName,
+      time: `${formatDate(appointment.appointmentDate)} at ${formatTime(appointment.startTime)}`,
+      reason: appointment.reason,
+      event: eventType
+    });
   };
 
   const openWhatsApp = (e, mobile, patientName) => {
@@ -392,12 +426,23 @@ export default function AppointmentsPage() {
     const action = PRIMARY_ACTION[r.status];
     return (
       <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+        {/* Doctor Phone Alert Button */}
+        <button
+          type="button"
+          onClick={(e) => notifyDoctorWhatsApp(e, r, r.status === 'scheduled' ? 'booked' : 'checked_in')}
+          className="flex h-8 items-center gap-1 rounded-xl border border-emerald-300 bg-emerald-50 px-2 text-[11px] font-bold text-emerald-700 transition hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300"
+          title="Alert Doctor on WhatsApp"
+        >
+          <Phone size={12} className="text-emerald-600" />
+          <span className="hidden sm:inline">Alert Dr</span>
+        </button>
+
         {r.mobile && (
           <button
             type="button"
             onClick={(e) => openWhatsApp(e, r.mobile, r.patientName)}
-            className="flex h-8 w-8 items-center justify-center rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-600 transition-colors hover:bg-emerald-100 hover:text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40"
-            title="Chat on WhatsApp"
+            className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+            title="Chat with Patient on WhatsApp"
           >
             <MessageCircle size={14} />
           </button>

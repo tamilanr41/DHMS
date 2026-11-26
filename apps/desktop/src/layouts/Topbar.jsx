@@ -4,7 +4,7 @@ import {
   Search, X, Loader2, ChevronDown, ChevronRight, KeyRound, LogOut, Bell,
   Plus, UserPlus, CalendarPlus, ReceiptText, Stethoscope, CheckCircle2,
   PackageX, AlertTriangle, LayoutDashboard, CalendarDays, Boxes, ShieldCheck,
-  Layers, Sun, Moon, Tablet, Menu, Sparkles
+  Layers, Sun, Moon, Tablet, Menu, Sparkles, Volume2
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../services/api.js';
@@ -13,6 +13,7 @@ import { useTheme } from '../services/theme.jsx';
 import { useClinic } from '../hooks/useClinic.js';
 import { formatDate, initials } from '../utils/format.js';
 import { ConfirmDialog } from '../components/ui/Modal.jsx';
+import { requestNotificationPermission, playChimeSound } from '../services/soundAndNotification.js';
 
 function useOutsideClose(onClose) {
   const ref = useRef(null);
@@ -242,6 +243,28 @@ function Notifications() {
             <span className="rounded-full bg-teal-50 px-2.5 py-0.5 text-[10px] font-bold text-[#0a7f8b] dark:bg-teal-950/40 dark:text-teal-300 border border-teal-200/60">
               {total} Pending
             </span>
+          </div>
+
+          {/* Doctor Phone Notification Enabler */}
+          <div className="border-b border-slate-100 p-2.5 bg-slate-50/70 dark:border-slate-700 dark:bg-slate-800/50">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-[11px] font-bold text-slate-800 dark:text-white">Mobile &amp; Sound Alerts</p>
+                <p className="text-[10px] text-slate-400">Ring chime when patient arrives</p>
+              </div>
+              <button
+                type="button"
+                onClick={async () => {
+                  playChimeSound('arrival');
+                  await requestNotificationPermission();
+                }}
+                className="inline-flex items-center gap-1 rounded-lg bg-[#0a7f8b] px-2 py-1 text-[10.5px] font-bold text-white shadow-xs hover:bg-[#086771]"
+                title="Enable sound & push alerts"
+              >
+                <Volume2 size={12} />
+                <span>Test Alert</span>
+              </button>
+            </div>
           </div>
           <div className="p-1">
             {total === 0 ? (

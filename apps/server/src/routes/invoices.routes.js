@@ -36,6 +36,12 @@ const invoiceSchema = z.object({
 router.get('/', requirePermission('invoices.view'), asyncHandler(async (req, res) => {
   const where = ['1=1'];
   const params = [];
+
+  if (req.user?.clinicId) {
+    params.push(req.user.clinicId);
+    where.push(`i.clinic_id = $${params.length}`);
+  }
+
   if (req.query.patientId) {
     params.push(req.query.patientId);
     where.push(`i.patient_id = $${params.length}`);
@@ -72,7 +78,8 @@ router.get('/', requirePermission('invoices.view'), asyncHandler(async (req, res
 
 router.post('/', requirePermission('invoices.manage'), asyncHandler(async (req, res) => {
   const body = validate(invoiceSchema, req.body);
-  const clinic = await getClinic();
+  const clinicId = req.user?.clinicId || null;
+  const clinic = await getClinic(clinicId);
   const taxPercent = body.taxPercent !== undefined ? body.taxPercent : clinic.taxEnabled ? Number(clinic.taxPercent) : 0;
 
   if (body.items.some((i) => toPaise(i.discount) > 0n) && !['dentist', 'admin'].includes(req.user.role)) {
@@ -95,15 +102,15 @@ router.post('/', requirePermission('invoices.manage'), asyncHandler(async (req, 
     const { rows } = await client.query(
       `INSERT INTO invoices (invoice_no, patient_id, consultation_id, invoice_date, subtotal, discount_total,
          tax_percent, tax_total, total, outstanding_balance, status, notes, created_by,
-         finalized_at)
-       VALUES ($1,$2,$3,COALESCE($4::date, CURRENT_DATE),$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+         finalized_at, clinic_id)
+       VALUES ($1,$2,$3,COALESCE($4::date, CURRENT_DATE),$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
        RETURNING *`,
       [
         no, body.patientId, body.consultationId || null, body.invoiceDate || null,
         totals.subtotal, totals.discountTotal, formatDecimal(taxPercent), totals.taxTotal,
         totals.total, totals.total,
         body.finalize ? 'issued' : 'draft', body.notes || null, req.user.id,
-        body.finalize ? new Date() : null
+        body.finalize ? new Date() : null, clinicId
       ]
     );
     for (let idx = 0; idx < body.items.length; idx++) {
@@ -129,7 +136,7 @@ router.post('/', requirePermission('invoices.manage'), asyncHandler(async (req, 
 
 router.get('/:id', requirePermission('invoices.view'), asyncHandler(async (req, res) => {
   const id = requireId(req.params.id, 'Invoice');
-  const invoice = await getInvoiceDetail(id);
+  const invoice = await getInvoiceDetail(id, req.user?.clinicId);
   if (!invoice) throw ApiError.notFound('Invoice not found');
   res.json({ data: invoice });
 }));
@@ -328,7 +335,9 @@ router.get('/:id/receipt.pdf', requirePermission('payments.view'), asyncHandler(
   await logAudit(null, req, { action: 'receipt.printed', entityType: 'invoice', entityId: id });
 }));
 
-export async function getInvoiceDetail(id) {
+export async function getInvoiceDetail(id, clinicId = null) {
+  const clinicWhere = clinicId ? ' AND i.clinic_id = $2' : '';
+  const params = clinicId ? [id, clinicId] : [id];
   const { rows } = await query(
     `SELECT i.*, p.full_name AS patient_name, p.patient_no, p.mobile, p.address, p.email, p.photo_file, p.photo_data,
             p.insurance_provider, p.insurance_policy_no,
@@ -337,8 +346,8 @@ export async function getInvoiceDetail(id) {
      JOIN patients p ON p.id = i.patient_id
      LEFT JOIN consultations c ON c.id = i.consultation_id
      LEFT JOIN users u ON u.id = i.created_by
-     WHERE i.id = $1`,
-    [id]
+     WHERE i.id = $1${clinicWhere}`,
+    params
   );
   if (!rows[0]) return null;
   const r = rows[0];
@@ -425,6 +434,7 @@ export async function getInvoiceDetail(id) {
 function mapInvoice(r) {
   return {
     id: r.id,
+    clinicId: r.clinic_id || null,
     invoiceNo: r.invoice_no,
     patientId: r.patient_id,
     patientName: r.patient_name,

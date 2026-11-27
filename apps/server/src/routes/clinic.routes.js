@@ -14,7 +14,7 @@ const router = Router();
 router.use(authenticate);
 
 router.get('/', asyncHandler(async (req, res) => {
-  res.json({ data: await getClinic() });
+  res.json({ data: await getClinic(req.user?.clinicId) });
 }));
 
 const settingsSchema = z.object({
@@ -82,34 +82,77 @@ const JSON_COLUMNS = new Set(['workingHours', 'defaultPaymentMethods', 'labWorkT
 
 router.patch('/', requirePermission('settings.manage'), asyncHandler(async (req, res) => {
   const body = validate(settingsSchema, req.body);
-  const sets = [];
-  const params = [req.user.id];
-  for (const [key, column] of Object.entries(COLUMN_MAP)) {
-    if (body[key] === undefined) continue;
-    params.push(JSON_COLUMNS.has(key) && body[key] !== null ? JSON.stringify(body[key]) : body[key]);
-    sets.push(`${column} = $${params.length}${JSON_COLUMNS.has(key) ? '::jsonb' : ''}`);
+  const clinicId = req.user?.clinicId;
+
+  // Check if a row exists for this clinic
+  let rowId = null;
+  if (clinicId) {
+    const { rows } = await query('SELECT id FROM clinic_settings WHERE clinic_id = $1 LIMIT 1', [clinicId]);
+    rowId = rows[0]?.id;
+  } else {
+    const { rows } = await query('SELECT id FROM clinic_settings ORDER BY id ASC LIMIT 1');
+    rowId = rows[0]?.id;
   }
-  if (!sets.length) throw ApiError.badRequest('No changes supplied');
-  params.push(new Date());
-  await query(
-    `UPDATE clinic_settings SET ${sets.join(', ')}, updated_at = $${params.length}, updated_by = $1 WHERE id = 1`,
-    params
-  );
-  await logAudit(null, req, { action: 'clinic.settings_updated', entityType: 'clinic_settings', entityId: '1', details: body });
-  res.json({ data: await getClinic() });
+
+  if (rowId) {
+    const sets = [];
+    const params = [req.user.id];
+    for (const [key, column] of Object.entries(COLUMN_MAP)) {
+      if (body[key] === undefined) continue;
+      params.push(JSON_COLUMNS.has(key) && body[key] !== null ? JSON.stringify(body[key]) : body[key]);
+      sets.push(`${column} = $${params.length}${JSON_COLUMNS.has(key) ? '::jsonb' : ''}`);
+    }
+    if (!sets.length) throw ApiError.badRequest('No changes supplied');
+    params.push(new Date());
+    params.push(rowId);
+    await query(
+      `UPDATE clinic_settings SET ${sets.join(', ')}, updated_at = $${params.length - 1}, updated_by = $1 WHERE id = $${params.length}`,
+      params
+    );
+  } else {
+    // Insert new row for this clinic
+    const cols = ['clinic_id', 'updated_by'];
+    const vals = ['$1', '$2'];
+    const params = [clinicId, req.user.id];
+    for (const [key, column] of Object.entries(COLUMN_MAP)) {
+      if (body[key] === undefined) continue;
+      cols.push(column);
+      params.push(JSON_COLUMNS.has(key) && body[key] !== null ? JSON.stringify(body[key]) : body[key]);
+      vals.push(`$${params.length}${JSON_COLUMNS.has(key) ? '::jsonb' : ''}`);
+    }
+    await query(`INSERT INTO clinic_settings (${cols.join(', ')}) VALUES (${vals.join(', ')})`, params);
+  }
+
+  await logAudit(null, req, { action: 'clinic.settings_updated', entityType: 'clinic_settings', entityId: String(rowId || clinicId || '1'), details: body });
+  res.json({ data: await getClinic(clinicId) });
 }));
 
 function saveBranding(kind) {
   return asyncHandler(async (req, res) => {
     if (!req.file) throw ApiError.badRequest('No image uploaded');
+    const clinicId = req.user?.clinicId;
     const column = kind === 'logo' ? 'logo_path' : 'dentist_signature_path';
-    const previous = (await query(`SELECT ${column} AS p FROM clinic_settings WHERE id = 1`)).rows[0]?.p;
-    await query(`UPDATE clinic_settings SET ${column} = $1, updated_at = now(), updated_by = $2 WHERE id = 1`, [req.file.filename, req.user.id]);
-    if (previous) {
-      const oldPath = path.join(DATA_DIRS.branding, previous);
-      if (fs.existsSync(oldPath)) fs.unlink(oldPath, () => {});
+
+    let existing;
+    if (clinicId) {
+      const q = await query(`SELECT id, ${column} AS p FROM clinic_settings WHERE clinic_id = $1 LIMIT 1`, [clinicId]);
+      existing = q.rows[0];
+    } else {
+      const q = await query(`SELECT id, ${column} AS p FROM clinic_settings ORDER BY id ASC LIMIT 1`);
+      existing = q.rows[0];
     }
-    await logAudit(null, req, { action: `clinic.${kind}_updated`, entityType: 'clinic_settings', entityId: '1' });
+
+    if (existing) {
+      await query(`UPDATE clinic_settings SET ${column} = $1, updated_at = now(), updated_by = $2 WHERE id = $3`, [req.file.filename, req.user.id, existing.id]);
+      if (existing.p) {
+        const oldPath = path.join(DATA_DIRS.branding, existing.p);
+        if (fs.existsSync(oldPath)) fs.unlink(oldPath, () => {});
+      }
+    } else {
+      await query(`INSERT INTO clinic_settings (clinic_id, ${column}, updated_by) VALUES ($1, $2, $3)`, [clinicId, req.file.filename, req.user.id]);
+    }
+
+    await logAudit(null, req, { action: `clinic.${kind}_updated`, entityType: 'clinic_settings', entityId: String(existing?.id || clinicId || '1') });
     res.json({ data: { fileName: req.file.filename } });
   });
 }
@@ -122,8 +165,18 @@ router.get('/files/:kind', asyncHandler(async (req, res) => {
   if (!['logo', 'signature'].includes(kind)) throw ApiError.notFound();
   const transparentGif = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
   const column = kind === 'logo' ? 'logo_path' : 'dentist_signature_path';
-  const { rows } = await query(`SELECT ${column} AS file_name FROM clinic_settings ORDER BY id ASC LIMIT 1`);
-  const fileName = rows[0]?.file_name;
+  const clinicId = req.query.clinicId || req.user?.clinicId || null;
+
+  let fileName = null;
+  if (clinicId) {
+    const { rows } = await query(`SELECT ${column} AS file_name FROM clinic_settings WHERE clinic_id = $1 LIMIT 1`, [clinicId]);
+    fileName = rows[0]?.file_name;
+  }
+  if (!fileName) {
+    const { rows } = await query(`SELECT ${column} AS file_name FROM clinic_settings ORDER BY id ASC LIMIT 1`);
+    fileName = rows[0]?.file_name;
+  }
+
   if (!fileName) {
     res.setHeader('Cache-Control', 'public, max-age=86400');
     return res.type('image/gif').send(transparentGif);

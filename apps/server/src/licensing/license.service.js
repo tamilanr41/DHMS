@@ -61,7 +61,7 @@ async function setupRequired() {
   return rows[0].count === 0;
 }
 
-export async function getLicenseStatus() {
+export async function getLicenseStatus(clinicId = null) {
   const base = {
     productName: 'ZhanX DentalCare',
     support: { email: config.licensing.supportEmail, phone: config.licensing.supportPhone || null }
@@ -69,10 +69,16 @@ export async function getLicenseStatus() {
 
   // 1. Check if clinic is activated in Tamilan Cloud SaaS
   try {
-    const { rows } = await query(
-      "SELECT * FROM clinic_tenants WHERE status = 'active' ORDER BY updated_at DESC LIMIT 1"
-    );
-    if (rows.length > 0) {
+    let rows;
+    if (clinicId) {
+      const q = await query('SELECT * FROM clinic_tenants WHERE id = $1 LIMIT 1', [clinicId]);
+      rows = q.rows;
+    } else {
+      const q = await query("SELECT * FROM clinic_tenants ORDER BY (status = 'active') DESC, updated_at DESC LIMIT 1");
+      rows = q.rows;
+    }
+
+    if (rows && rows.length > 0) {
       const activeClinic = rows[0];
       const userQ = await query(
         'SELECT count(*)::int AS count FROM users WHERE clinic_id = $1',
@@ -80,9 +86,53 @@ export async function getLicenseStatus() {
       );
       const isSetupNeeded = userQ.rows[0].count === 0;
 
+      const validUntilStr = activeClinic.valid_until;
+      let isExpired = false;
+      let daysRemaining = 999;
+      let isExpiringSoon = false;
+
+      if (validUntilStr) {
+        const validUntil = new Date(validUntilStr);
+        const now = new Date();
+        const diffMs = validUntil.getTime() - now.getTime();
+        daysRemaining = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+        if (daysRemaining < 0 || activeClinic.status === 'suspended' || activeClinic.status === 'expired') {
+          isExpired = true;
+          daysRemaining = 0;
+        } else if (daysRemaining <= 7) {
+          isExpiringSoon = true;
+        }
+      }
+
+      if (isExpired) {
+        return {
+          ...base,
+          activated: false,
+          isExpired: true,
+          daysRemaining: 0,
+          isExpiringSoon: false,
+          deviceId: 'TAMILAN-CLOUD-SAAS',
+          deviceProtection: 'cloud-saas',
+          reason: 'SUBSCRIPTION_EXPIRED',
+          message: `Subscription for ${activeClinic.clinic_name} expired. Please contact Zen Nova Solutions / Tamilan Admin (+91 94883 48788) to renew.`,
+          license: {
+            licenseId: activeClinic.clinic_code,
+            clinicName: activeClinic.clinic_name,
+            tier: activeClinic.plan_name || 'Standard Care',
+            validUntil: activeClinic.valid_until
+          },
+          clinicId: activeClinic.id,
+          clinicCode: activeClinic.clinic_code,
+          setupRequired: false
+        };
+      }
+
       return {
         ...base,
-        activated: true,
+        activated: activeClinic.status === 'active' || activeClinic.status === 'trial',
+        isExpired: false,
+        daysRemaining,
+        isExpiringSoon,
         deviceId: 'TAMILAN-CLOUD-SAAS',
         deviceProtection: 'cloud-saas',
         reason: null,

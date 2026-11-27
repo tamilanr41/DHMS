@@ -23,15 +23,20 @@ const suppliers = Router();
 suppliers.use(authenticate);
 
 suppliers.get('/', requirePermission('inventory.view'), asyncHandler(async (req, res) => {
-  const { rows } = await query('SELECT * FROM suppliers ORDER BY is_active DESC, name');
+  const clinicId = req.user?.clinicId || null;
+  const { rows } = await query(
+    'SELECT * FROM suppliers WHERE ($1::uuid IS NULL OR clinic_id = $1) ORDER BY is_active DESC, name',
+    [clinicId]
+  );
   res.json({ data: rows.map((s) => ({ id: s.id, name: s.name, contactPerson: s.contact_person, phone: s.phone, email: s.email, address: s.address, isActive: s.is_active })) });
 }));
 
 suppliers.post('/', requirePermission('inventory.manage'), asyncHandler(async (req, res) => {
   const body = validate(supplierSchema, req.body);
+  const clinicId = req.user?.clinicId || null;
   const { rows } = await query(
-    `INSERT INTO suppliers (name, contact_person, phone, email, address) VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-    [body.name, body.contactPerson || null, body.phone || null, body.email || null, body.address || null]
+    `INSERT INTO suppliers (name, contact_person, phone, email, address, clinic_id) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+    [body.name, body.contactPerson || null, body.phone || null, body.email || null, body.address || null, clinicId]
   );
   await logAudit(null, req, { action: 'supplier.created', entityType: 'supplier', entityId: rows[0].id, details: body });
   res.status(201).json({ data: rows[0] });
@@ -40,11 +45,14 @@ suppliers.post('/', requirePermission('inventory.manage'), asyncHandler(async (r
 suppliers.patch('/:id', requirePermission('inventory.manage'), asyncHandler(async (req, res) => {
   const id = requireId(req.params.id, 'Supplier');
   const body = validate(supplierSchema.partial(), req.body);
+  const clinicWhere = req.user?.clinicId ? ' AND clinic_id = $8' : '';
+  const params = [id, body.name ?? null, body.contactPerson ?? null, body.phone ?? null, body.email ?? null, body.address ?? null, body.isActive ?? null];
+  if (req.user?.clinicId) params.push(req.user.clinicId);
   const { rows } = await query(
     `UPDATE suppliers SET name = COALESCE($2,name), contact_person = COALESCE($3,contact_person),
        phone = COALESCE($4,phone), email = COALESCE($5,email), address = COALESCE($6,address),
-       is_active = COALESCE($7,is_active) WHERE id = $1 RETURNING *`,
-    [id, body.name ?? null, body.contactPerson ?? null, body.phone ?? null, body.email ?? null, body.address ?? null, body.isActive ?? null]
+       is_active = COALESCE($7,is_active) WHERE id = $1${clinicWhere} RETURNING *`,
+    params
   );
   if (!rows[0]) throw ApiError.notFound('Supplier not found');
   res.json({ data: rows[0] });
@@ -67,6 +75,10 @@ const itemSchema = z.object({
 router.get('/items', requirePermission('inventory.view'), asyncHandler(async (req, res) => {
   const where = ['1=1'];
   const params = [];
+  if (req.user?.clinicId) {
+    params.push(req.user.clinicId);
+    where.push(`i.clinic_id = $${params.length}`);
+  }
   if (req.query.q) {
     params.push(`%${req.query.q}%`);
     where.push(`(i.name ILIKE $${params.length} OR i.category ILIKE $${params.length} OR i.item_code ILIKE $${params.length} OR i.brand ILIKE $${params.length})`);
@@ -88,12 +100,15 @@ router.get('/items', requirePermission('inventory.view'), asyncHandler(async (re
 
 router.post('/items', requirePermission('inventory.manage'), asyncHandler(async (req, res) => {
   const body = validate(itemSchema, req.body);
+  const clinicId = req.user?.clinicId || null;
   const item = await withTransaction(async (client) => {
     const { rows } = await client.query(
-      `INSERT INTO inventory_items (item_code, name, category, brand, unit, batch_number, purchase_price, expiry_date, supplier_id, min_stock)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
-      [body.itemCode || null, body.name, body.category, body.brand || null, body.unit, body.batchNumber || null, body.purchasePrice, body.expiryDate || null, body.supplierId || null, body.minStock]
+      `INSERT INTO inventory_items (item_code, name, category, brand, unit, batch_number, purchase_price, expiry_date, supplier_id, min_stock, clinic_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+      [body.itemCode || null, body.name, body.category, body.brand || null, body.unit, body.batchNumber || null, body.purchasePrice, body.expiryDate || null, body.supplierId || null, body.minStock, clinicId]
     );
+    return rows[0];
+  });
     return rows[0];
   });
   await logAudit(null, req, { action: 'inventory.item_created', entityType: 'inventory_item', entityId: item.id, details: { name: item.name } });

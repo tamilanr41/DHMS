@@ -30,7 +30,8 @@ const activationSchema = z.object({
 });
 
 router.get('/status', asyncHandler(async (req, res) => {
-  res.json({ data: await getLicenseStatus() });
+  const clinicId = req.query.clinicId || req.headers['x-clinic-id'] || null;
+  res.json({ data: await getLicenseStatus(clinicId) });
 }));
 
 router.get('/info', asyncHandler(async (req, res) => {

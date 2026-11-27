@@ -254,7 +254,7 @@ export function waitForPdf(doc, res, fileName) {
 }
 
 export async function streamInvoice(invoice, res) {
-  const clinic = await getClinic();
+  const clinic = await getClinic(invoice.clinicId || invoice.clinic_id);
   const doc = newDoc();
   let y = clinicHeader(doc, clinic, 'Invoice', `${invoice.invoiceNo}  |  ${fmtDate(invoice.invoiceDate)}`);
 
@@ -311,8 +311,9 @@ export async function streamInvoice(invoice, res) {
 }
 
 export async function streamReceipt({ invoice, clinic }, res) {
+  const effectiveClinic = clinic || (await getClinic(invoice?.clinicId || invoice?.clinic_id));
   const doc = newDoc();
-  let y = clinicHeader(doc, clinic, 'Payment Receipt', invoice.invoiceNo);
+  let y = clinicHeader(doc, effectiveClinic, 'Payment Receipt', invoice.invoiceNo);
   y = keyValueBlock(doc, PAGE.margin, y, doc.page.width - PAGE.margin * 2, [
     ['Patient', invoice.patient.fullName],
     ['Patient ID', invoice.patient.patientNo],
@@ -335,7 +336,7 @@ export async function streamReceipt({ invoice, clinic }, res) {
     y
   );
 
-  const sig = brandingPath(clinic, 'signature');
+  const sig = brandingPath(effectiveClinic, 'signature');
   if (sig) {
     try {
       doc.image(sig, doc.page.width - PAGE.margin - 130, doc.page.height - 150, { fit: [120, 50] });
@@ -343,13 +344,14 @@ export async function streamReceipt({ invoice, clinic }, res) {
       /* ignore */
     }
   }
-  footerOnEveryPage(doc, clinic);
+  footerOnEveryPage(doc, effectiveClinic);
   waitForPdf(doc, res, `Receipt-${invoice.invoiceNo}.pdf`);
 }
 
 export async function streamPaymentReceipt({ payment, clinic }, res) {
+  const effectiveClinic = clinic || (await getClinic(payment?.clinicId || payment?.clinic_id));
   const doc = newDoc();
-  let y = clinicHeader(doc, clinic, 'Payment Receipt', payment.paymentNo);
+  let y = clinicHeader(doc, effectiveClinic, 'Payment Receipt', payment.paymentNo);
   y = keyValueBlock(doc, PAGE.margin, y, doc.page.width - PAGE.margin * 2, [
     ['Patient', payment.patientName],
     ['Patient ID', payment.patientNo],
@@ -369,7 +371,7 @@ export async function streamPaymentReceipt({ payment, clinic }, res) {
 }
 
 export async function streamPrescription(prescription, res) {
-  const clinic = await getClinic();
+  const clinic = await getClinic(prescription.clinicId || prescription.clinic_id);
   const doc = newDoc();
   let y = clinicHeader(doc, clinic, 'Prescription', `${prescription.prescriptionNo}  |  ${fmtDate(prescription.prescriptionDate)}`);
 
@@ -441,7 +443,7 @@ export async function streamPrescription(prescription, res) {
 }
 
 export async function streamTreatmentEstimate(plan, res, { userName } = {}) {
-  const clinic = await getClinic();
+  const clinic = await getClinic(plan.clinicId || plan.clinic_id);
   const doc = newDoc();
   let y = clinicHeader(doc, clinic, 'Treatment Estimate', `${plan.planNo}  |  ${fmtDate(plan.createdAt)}`);
 
@@ -573,7 +575,7 @@ export async function streamPatientStatement({ patient, clinic, summary, entries
 }
 
 export async function streamConsent({ consent, planNo, patient, dentistName }, res) {
-  const clinic = await getClinic();
+  const clinic = await getClinic(patient?.clinicId || patient?.clinic_id);
   const doc = newDoc();
   let y = clinicHeader(doc, clinic, 'Informed Consent', `${consent.title}`);
 

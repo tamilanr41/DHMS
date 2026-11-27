@@ -11,6 +11,7 @@ router.use(authenticate);
 router.get('/', requirePermission('dashboard.view'), asyncHandler(async (req, res) => {
   const { start, end } = parseDateRange(req.query, { defaultDays: 30 });
   const today = todayISO();
+  const clinicId = req.user?.clinicId || null;
   // Money on the dashboard follows the same permission as billing data, so an
   // assistant without billing access cannot read collections from this endpoint.
   const canSeeFinancials =
@@ -41,66 +42,68 @@ router.get('/', requirePermission('dashboard.view'), asyncHandler(async (req, re
               count(*) FILTER (WHERE status = 'completed')::int AS completed,
               count(*) FILTER (WHERE status = 'cancelled')::int AS cancelled,
               count(*) FILTER (WHERE status = 'no_show')::int AS no_show
-       FROM appointments WHERE appointment_date BETWEEN $1 AND $2`,
-      [start, end]
+       FROM appointments WHERE appointment_date BETWEEN $1 AND $2 AND ($3::uuid IS NULL OR clinic_id = $3)`,
+      [start, end, clinicId]
     ),
-    query(`SELECT count(*)::int AS c FROM appointments WHERE appointment_date = $1 AND status IN ('checked_in','waiting','in_consultation')`, [today]),
-    query(`SELECT count(*)::int AS c FROM patients WHERE created_at::date BETWEEN $1 AND $2`, [start, end]),
-    query(`SELECT count(*)::int AS c FROM patients WHERE is_active`),
+    query(`SELECT count(*)::int AS c FROM appointments WHERE appointment_date = $1 AND status IN ('checked_in','waiting','in_consultation') AND ($2::uuid IS NULL OR clinic_id = $2)`, [today, clinicId]),
+    query(`SELECT count(*)::int AS c FROM patients WHERE created_at::date BETWEEN $1 AND $2 AND ($3::uuid IS NULL OR clinic_id = $3)`, [start, end, clinicId]),
+    query(`SELECT count(*)::int AS c FROM patients WHERE is_active AND ($1::uuid IS NULL OR clinic_id = $1)`, [clinicId]),
     query(
-      `SELECT COALESCE((SELECT sum(amount) FROM payments WHERE status='completed' AND payment_date::date BETWEEN $1 AND $2),0) AS paid,
+      `SELECT COALESCE((SELECT sum(amount) FROM payments WHERE status='completed' AND payment_date::date BETWEEN $1 AND $2 AND ($3::uuid IS NULL OR clinic_id = $3)),0) AS paid,
               COALESCE((SELECT sum(amount) FROM refunds WHERE refunded_at::date BETWEEN $1 AND $2),0) AS refunded`,
-      [start, end]
+      [start, end, clinicId]
     ),
-    query(`SELECT COALESCE(sum(total),0) AS c FROM invoices WHERE status NOT IN ('void','draft') AND invoice_date BETWEEN $1 AND $2`, [start, end]),
+    query(`SELECT COALESCE(sum(total),0) AS c FROM invoices WHERE status NOT IN ('void','draft') AND invoice_date BETWEEN $1 AND $2 AND ($3::uuid IS NULL OR clinic_id = $3)`, [start, end, clinicId]),
     query(
-      `SELECT COALESCE(sum(outstanding_balance),0) AS c FROM invoices WHERE status IN ('issued','partially_paid')`
+      `SELECT COALESCE(sum(outstanding_balance),0) AS c FROM invoices WHERE status IN ('issued','partially_paid') AND ($1::uuid IS NULL OR clinic_id = $1)`,
+      [clinicId]
     ),
     query(
       `SELECT c.id, c.consultation_no, c.visit_at, c.diagnosis, c.status, p.full_name AS patient_name, p.id AS patient_id,
               u.full_name AS dentist_name
        FROM consultations c JOIN patients p ON p.id = c.patient_id JOIN users u ON u.id = c.dentist_id
-       WHERE c.visit_at::date BETWEEN $1 AND $2
+       WHERE c.visit_at::date BETWEEN $1 AND $2 AND ($3::uuid IS NULL OR p.clinic_id = $3)
        ORDER BY c.visit_at DESC LIMIT 6`,
-      [start, end]
+      [start, end, clinicId]
     ),
     query(
       `SELECT pay.id, pay.payment_no, pay.amount, pay.method, pay.payment_date, pay.status,
               p.full_name AS patient_name, p.id AS patient_id, i.invoice_no
        FROM payments pay JOIN patients p ON p.id = pay.patient_id JOIN invoices i ON i.id = pay.invoice_id
-       WHERE pay.payment_date::date BETWEEN $1 AND $2
+       WHERE pay.payment_date::date BETWEEN $1 AND $2 AND ($3::uuid IS NULL OR i.clinic_id = $3)
        ORDER BY pay.payment_date DESC LIMIT 6`,
-      [start, end]
+      [start, end, clinicId]
     ),
     query(
       `SELECT a.id, a.appointment_no, a.appointment_date, a.start_time, a.status, a.reason,
               p.full_name AS patient_name, p.id AS patient_id, u.full_name AS dentist_name
        FROM appointments a JOIN patients p ON p.id = a.patient_id JOIN users u ON u.id = a.dentist_id
        WHERE a.appointment_date >= $1 AND a.status IN ('scheduled','confirmed') AND a.appointment_date <= ($1::date + interval '7 days')
+         AND ($2::uuid IS NULL OR a.clinic_id = $2)
        ORDER BY a.appointment_date, a.start_time LIMIT 8`,
-      [today]
+      [today, clinicId]
     ),
     query(
       `SELECT status, count(*)::int AS count FROM appointments
-       WHERE appointment_date BETWEEN $1 AND $2 GROUP BY status ORDER BY count DESC`,
-      [start, end]
+       WHERE appointment_date BETWEEN $1 AND $2 AND ($3::uuid IS NULL OR clinic_id = $3) GROUP BY status ORDER BY count DESC`,
+      [start, end, clinicId]
     ),
     query(
       `WITH months AS (
          SELECT generate_series(date_trunc('month', $1::date) - interval '5 months', date_trunc('month', $1::date), '1 month')::date AS m
        )
        SELECT to_char(m, 'Mon YYYY') AS label, m,
-              COALESCE((SELECT sum(amount) FROM payments WHERE status='completed' AND payment_date >= m AND payment_date < m + interval '1 month'),0) AS collected,
+              COALESCE((SELECT sum(amount) FROM payments WHERE status='completed' AND payment_date >= m AND payment_date < m + interval '1 month' AND ($2::uuid IS NULL OR clinic_id = $2)),0) AS collected,
               COALESCE((SELECT sum(amount) FROM refunds WHERE refunded_at >= m AND refunded_at < m + interval '1 month'),0) AS refunded
        FROM months ORDER BY m`,
-      [end]
+      [end, clinicId]
     ),
     query(
-      `SELECT count(*)::int AS c FROM consultations WHERE follow_up_date BETWEEN $1 AND $2 AND status <> 'draft'`,
-      [today, today]
+      `SELECT count(*)::int AS c FROM consultations c JOIN patients p ON p.id = c.patient_id WHERE c.follow_up_date BETWEEN $1 AND $2 AND c.status <> 'draft' AND ($3::uuid IS NULL OR p.clinic_id = $3)`,
+      [today, today, clinicId]
     ),
-    query(`SELECT count(*)::int AS c FROM inventory_items WHERE is_active AND quantity <= min_stock`),
-    query(`SELECT count(*)::int AS c FROM inventory_items WHERE is_active AND expiry_date IS NOT NULL AND expiry_date <= (CURRENT_DATE + interval '60 days')`),
+    query(`SELECT count(*)::int AS c FROM inventory_items WHERE is_active AND quantity <= min_stock AND ($1::uuid IS NULL OR clinic_id = $1)`, [clinicId]),
+    query(`SELECT count(*)::int AS c FROM inventory_items WHERE is_active AND expiry_date IS NOT NULL AND expiry_date <= (CURRENT_DATE + interval '60 days') AND ($1::uuid IS NULL OR clinic_id = $1)`, [clinicId]),
     query(
       `SELECT COALESCE(tc.category, 'General Dentistry') AS name,
               count(ii.id)::int AS value,
@@ -108,14 +111,16 @@ router.get('/', requirePermission('dashboard.view'), asyncHandler(async (req, re
        FROM invoice_items ii
        JOIN invoices i ON i.id = ii.invoice_id
        LEFT JOIN treatment_catalog tc ON tc.id = ii.treatment_id
-       WHERE i.status NOT IN ('void','draft')
+       WHERE i.status NOT IN ('void','draft') AND ($1::uuid IS NULL OR i.clinic_id = $1)
        GROUP BY COALESCE(tc.category, 'General Dentistry')
-       ORDER BY value DESC LIMIT 6`
+       ORDER BY value DESC LIMIT 6`,
+      [clinicId]
     ),
     query(
       `SELECT count(*) FILTER (WHERE (SELECT count(*) FROM consultations c WHERE c.patient_id = p.id) <= 1)::int AS new_patients,
               count(*) FILTER (WHERE (SELECT count(*) FROM consultations c WHERE c.patient_id = p.id) > 1)::int AS returning_patients
-       FROM patients p WHERE p.is_active`
+       FROM patients p WHERE p.is_active AND ($1::uuid IS NULL OR p.clinic_id = $1)`,
+      [clinicId]
     ),
     query(
       `WITH days AS (

@@ -80,6 +80,12 @@ async function recalcPlan(client, planId) {
 router.get('/', requirePermission('plans.view'), asyncHandler(async (req, res) => {
   const where = ['1=1'];
   const params = [];
+
+  if (req.user?.clinicId) {
+    params.push(req.user.clinicId);
+    where.push(`tp.clinic_id = $${params.length}`);
+  }
+
   if (req.query.patientId) {
     params.push(req.query.patientId);
     where.push(`tp.patient_id = $${params.length}`);
@@ -113,6 +119,7 @@ router.get('/', requirePermission('plans.view'), asyncHandler(async (req, res) =
 
 router.post('/', requirePermission('plans.manage'), asyncHandler(async (req, res) => {
   const body = validate(planSchema, req.body);
+  const clinicId = req.user?.clinicId || null;
   let dentistId = req.user.role === 'dentist' ? req.user.id : body.dentistId;
   if (!dentistId) {
     const defaultDentist = await query(
@@ -130,9 +137,9 @@ router.post('/', requirePermission('plans.manage'), asyncHandler(async (req, res
     const { rows: seq } = await client.query(`SELECT nextval('seq_plan') AS n`);
     const planNo = `TP-${String(seq[0].n).padStart(6, '0')}`;
     const { rows } = await client.query(
-      `INSERT INTO treatment_plans (plan_no, patient_id, consultation_id, dentist_id, notes, created_by)
-       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
-      [planNo, body.patientId, body.consultationId || null, dentistId, body.notes || null, req.user.id]
+      `INSERT INTO treatment_plans (plan_no, patient_id, consultation_id, dentist_id, notes, created_by, clinic_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+      [planNo, body.patientId, body.consultationId || null, dentistId, body.notes || null, req.user.id, clinicId]
     );
     const planId = rows[0].id;
     for (let i = 0; i < items.length; i++) {
@@ -153,7 +160,7 @@ router.post('/', requirePermission('plans.manage'), asyncHandler(async (req, res
 
 router.get('/:id', requirePermission('plans.view'), asyncHandler(async (req, res) => {
   const id = requireId(req.params.id, 'Treatment plan');
-  const plan = await fetchPlan(id);
+  const plan = await fetchPlan(id, req.user?.clinicId);
   if (!plan) throw ApiError.notFound('Treatment plan not found');
   res.json({ data: plan });
 }));
@@ -270,7 +277,9 @@ router.get('/:id/pdf', requirePermission('plans.view'), asyncHandler(async (req,
   await logAudit(null, req, { action: 'plan.pdf_generated', entityType: 'treatment_plan', entityId: id });
 }));
 
-async function fetchPlan(id) {
+async function fetchPlan(id, clinicId = null) {
+  const clinicWhere = clinicId ? ' AND tp.clinic_id = $2' : '';
+  const params = clinicId ? [id, clinicId] : [id];
   const { rows } = await query(
     `SELECT tp.*, p.full_name AS patient_name, p.patient_no, p.mobile, p.dob, p.gender, p.photo_file, p.photo_data,
             date_part('year', age(p.dob))::int AS age, u.full_name AS dentist_name,
@@ -279,8 +288,8 @@ async function fetchPlan(id) {
      JOIN patients p ON p.id = tp.patient_id
      JOIN users u ON u.id = tp.dentist_id
      LEFT JOIN consultations c ON c.id = tp.consultation_id
-     WHERE tp.id = $1`,
-    [id]
+     WHERE tp.id = $1${clinicWhere}`,
+    params
   );
   if (!rows[0]) return null;
   const items = await query('SELECT * FROM treatment_plan_items WHERE plan_id = $1 ORDER BY sort_order, created_at, id', [id]);
@@ -319,6 +328,7 @@ async function fetchPlan(id) {
 function mapPlan(r) {
   return {
     id: r.id,
+    clinicId: r.clinic_id || null,
     planNo: r.plan_no,
     patientId: r.patient_id,
     patientName: r.patient_name,

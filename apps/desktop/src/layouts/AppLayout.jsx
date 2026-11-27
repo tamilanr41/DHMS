@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar.jsx';
 import Topbar from './Topbar.jsx';
+import SubscriptionWarningBanner from '../components/SubscriptionWarningBanner.jsx';
 
 const STORAGE_KEY = 'zhanx.sidebarCollapsed';
 
@@ -84,6 +85,8 @@ export default function AppLayout({ children }) {
           onToggleSidebar={() => setCollapsed((v) => !v)}
           onToggleMobile={() => setMobileOpen((v) => !v)}
         />
+
+        <SubscriptionWarningBanner />
 
         <main className="flex-1 px-2.5 py-3 sm:px-4 sm:py-4 md:px-5 lg:px-6" id="main-content">
           <div key={pathname} className="mx-auto w-full max-w-[1680px]">

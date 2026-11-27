@@ -31,13 +31,15 @@ export async function loadUserWithPermissions(userId) {
   const { rows } = await query(
     `SELECT u.id, u.username, u.full_name, u.is_active, u.must_change_password, u.clinic_id,
             r.code AS role_code, r.name AS role_name,
+            c.clinic_name, c.clinic_code, c.status AS clinic_status, c.valid_until AS clinic_valid_until, c.plan_name AS clinic_plan,
             COALESCE(array_agg(p.code) FILTER (WHERE p.code IS NOT NULL), '{}') AS permissions
      FROM users u
      JOIN roles r ON r.id = u.role_id
+     LEFT JOIN clinic_tenants c ON c.id = u.clinic_id
      LEFT JOIN role_permissions rp ON rp.role_id = r.id
      LEFT JOIN permissions p ON p.id = rp.permission_id
      WHERE u.id = $1
-     GROUP BY u.id, u.clinic_id, r.code, r.name`,
+     GROUP BY u.id, u.clinic_id, r.code, r.name, c.clinic_name, c.clinic_code, c.status, c.valid_until, c.plan_name`,
     [userId]
   );
   return rows[0] || null;
@@ -155,7 +157,7 @@ export async function refreshSession(refreshToken, req) {
   });
 
   return {
-    accessToken: signAccessToken({ id: profile.id, role_code: profile.role_code, full_name: profile.full_name }),
+    accessToken: signAccessToken({ id: profile.id, role_code: profile.role_code, full_name: profile.full_name, clinic_id: profile.clinic_id }),
     refreshToken: rotated.token,
     refreshExpiresAt: rotated.expiresAt,
     user: toClientUser(profile)
@@ -198,6 +200,12 @@ export function toClientUser(profile) {
     fullName: profile.full_name,
     role: profile.role_code,
     roleName: profile.role_name,
+    clinicId: profile.clinic_id || null,
+    clinicName: profile.clinic_name || null,
+    clinicCode: profile.clinic_code || null,
+    clinicStatus: profile.clinic_status || null,
+    clinicValidUntil: profile.clinic_valid_until || null,
+    clinicPlan: profile.clinic_plan || null,
     permissions: profile.permissions,
     mustChangePassword: profile.must_change_password
   };

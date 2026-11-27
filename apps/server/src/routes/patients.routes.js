@@ -10,6 +10,7 @@ import { authenticate, requirePermission, requireAnyPermission } from '../middle
 import { requireId } from '../middleware/error.js';
 import { uploadDocument, uploadPatientPhoto, uploadClinicalPhoto, DATA_DIRS } from '../middleware/upload.js';
 import { logAudit } from '../services/audit.service.js';
+import { getClinic } from '../services/clinic.service.js';
 
 const router = Router();
 router.use(authenticate);
@@ -47,6 +48,11 @@ router.get('/', requirePermission('patients.view'), asyncHandler(async (req, res
   const q = String(req.query.q || '').trim();
   const where = [];
   const params = [];
+
+  if (req.user?.clinicId) {
+    params.push(req.user.clinicId);
+    where.push(`p.clinic_id = $${params.length}`);
+  }
 
   if (q) {
     params.push(`%${q}%`);
@@ -97,12 +103,14 @@ router.get('/', requirePermission('patients.view'), asyncHandler(async (req, res
 router.get('/search', requirePermission('patients.view'), asyncHandler(async (req, res) => {
   const q = String(req.query.q || '').trim();
   if (q.length < 2) return res.json({ data: [] });
+  const clinicWhere = req.user?.clinicId ? 'AND clinic_id = $2' : '';
+  const searchParams = req.user?.clinicId ? [`%${q}%`, req.user.clinicId] : [`%${q}%`];
   const { rows } = await query(
     `SELECT id, patient_no, full_name, mobile, dob, gender, photo_file, photo_data
      FROM patients
-     WHERE full_name ILIKE $1 OR mobile ILIKE $1 OR patient_no ILIKE $1
+     WHERE (full_name ILIKE $1 OR mobile ILIKE $1 OR patient_no ILIKE $1) ${clinicWhere}
      ORDER BY is_active DESC, full_name LIMIT 10`,
-    [`%${q}%`]
+    searchParams
   );
   res.json({
     data: rows.map((r) => ({
@@ -119,8 +127,9 @@ router.get('/search', requirePermission('patients.view'), asyncHandler(async (re
 
 router.post('/', requirePermission('patients.create'), asyncHandler(async (req, res) => {
   const body = validate(patientSchema, req.body);
+  const clinicId = req.user?.clinicId || null;
 
-  const dupes = await findDuplicates(body);
+  const dupes = await findDuplicates(body, clinicId);
   if (dupes.length && !body.confirmDuplicate) {
     throw new ApiError(409, 'Possible duplicate patient found. Review before creating.', {
       code: 'POSSIBLE_DUPLICATE',
@@ -129,8 +138,8 @@ router.post('/', requirePermission('patients.create'), asyncHandler(async (req, 
   }
 
   const patient = await withTransaction(async (client) => {
-    const { rows: setting } = await client.query('SELECT patient_prefix FROM clinic_settings WHERE id = 1');
-    const prefix = setting[0]?.patient_prefix || 'P';
+    const clinic = await getClinic(clinicId);
+    const prefix = clinic.patientPrefix || 'P';
     const { rows: seq } = await client.query(`SELECT nextval('seq_patient') AS n`);
     const patientNo = `${prefix}${String(seq[0].n).padStart(6, '0')}`;
     const { rows } = await client.query(
@@ -140,8 +149,8 @@ router.post('/', requirePermission('patients.create'), asyncHandler(async (req, 
          id_proof_type, id_proof_number,
          emergency_contact_name, emergency_contact_relation, emergency_contact_phone,
          referred_by, insurance_provider, insurance_policy_no,
-         notes, data_consent, data_consent_at, created_by, updated_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$26)
+         notes, data_consent, data_consent_at, created_by, updated_by, clinic_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$26,$27)
        RETURNING *`,
       [
         patientNo, body.fullName, body.dob || null, body.gender || null, body.mobile,
@@ -151,7 +160,7 @@ router.post('/', requirePermission('patients.create'), asyncHandler(async (req, 
         body.emergencyContactName || null, body.emergencyContactRelation || null, body.emergencyContactPhone || null,
         body.referredBy || null, body.insuranceProvider || null, body.insurancePolicyNo || null,
         body.notes || null, Boolean(body.dataConsent), body.dataConsent ? new Date() : null,
-        req.user.id
+        req.user.id, clinicId
       ]
     );
     return rows[0];
@@ -178,14 +187,16 @@ const kioskCheckinSchema = z.object({
 router.post('/kiosk-checkin', asyncHandler(async (req, res) => {
   const body = validate(kioskCheckinSchema, req.body);
   const cleanMobile = body.mobile.replace(/\D/g, '').slice(-10);
+  const clinicId = req.user?.clinicId || null;
 
   // Check if patient exists by matching the last 10 digits
   const existing = await query(
     `SELECT p.*, (SELECT count(*) FROM consultations c WHERE c.patient_id = p.id)::int AS visit_count
      FROM patients p
      WHERE right(regexp_replace(p.mobile, '[^0-9]', '', 'g'), 10) = $1
+       AND ($2::uuid IS NULL OR p.clinic_id = $2)
      ORDER BY p.created_at LIMIT 1`,
-    [cleanMobile]
+    [cleanMobile, clinicId]
   );
 
   let patient = existing.rows[0];
@@ -200,8 +211,8 @@ router.post('/kiosk-checkin', asyncHandler(async (req, res) => {
     }
 
     patient = await withTransaction(async (client) => {
-      const { rows: setting } = await client.query('SELECT patient_prefix FROM clinic_settings WHERE id = 1');
-      const prefix = setting[0]?.patient_prefix || 'P';
+      const clinic = await getClinic(clinicId);
+      const prefix = clinic.patientPrefix || 'P';
       const { rows: seq } = await client.query(`SELECT nextval('seq_patient') AS n`);
       const patientNo = `${prefix}${String(seq[0].n).padStart(6, '0')}`;
       const notes = [
@@ -210,10 +221,10 @@ router.post('/kiosk-checkin', asyncHandler(async (req, res) => {
       ].filter(Boolean).join(' | ');
 
       const { rows } = await client.query(
-        `INSERT INTO patients (patient_no, full_name, dob, gender, mobile, notes, data_consent, data_consent_at, created_by, updated_by)
-         VALUES ($1, $2, $3, $4, $5, $6, true, now(), $7, $7)
+        `INSERT INTO patients (patient_no, full_name, dob, gender, mobile, notes, data_consent, data_consent_at, created_by, updated_by, clinic_id)
+         VALUES ($1, $2, $3, $4, $5, $6, true, now(), $7, $7, $8)
          RETURNING *`,
-        [patientNo, body.fullName, dob, body.gender || null, body.mobile, notes || null, req.user?.id || (await query('SELECT id FROM users LIMIT 1')).rows[0].id]
+        [patientNo, body.fullName, dob, body.gender || null, body.mobile, notes || null, req.user?.id || (await query('SELECT id FROM users LIMIT 1')).rows[0].id, clinicId]
       );
       return rows[0];
     });
@@ -267,6 +278,8 @@ router.post('/kiosk-checkin', asyncHandler(async (req, res) => {
 
 router.get('/:id', requirePermission('patients.view'), asyncHandler(async (req, res) => {
   const id = requireId(req.params.id, 'Patient');
+  const clinicWhere = req.user?.clinicId ? ' AND p.clinic_id = $2' : '';
+  const queryParams = req.user?.clinicId ? [id, req.user.clinicId] : [id];
   const { rows } = await query(
     `SELECT p.*, date_part('year', age(p.dob))::int AS age,
             COALESCE((SELECT sum(i.outstanding_balance) FROM invoices i
@@ -275,8 +288,8 @@ router.get('/:id', requirePermission('patients.view'), asyncHandler(async (req, 
             (SELECT count(*) FROM consultations c WHERE c.patient_id = p.id)::int AS visit_count,
             (SELECT allergies FROM patient_medical_history h WHERE h.patient_id = p.id AND h.is_current LIMIT 1) AS allergies,
             (SELECT conditions FROM patient_medical_history h WHERE h.patient_id = p.id AND h.is_current LIMIT 1) AS conditions
-     FROM patients p WHERE p.id = $1`,
-    [id]
+     FROM patients p WHERE p.id = $1${clinicWhere}`,
+    queryParams
   );
   if (!rows[0]) throw ApiError.notFound('Patient not found');
   const patient = mapPatient(rows[0]);
@@ -315,8 +328,16 @@ router.patch('/:id', requirePermission('patients.edit'), asyncHandler(async (req
   }
   if (!sets.length) throw ApiError.badRequest('No changes supplied');
   params.push(req.user.id);
+  let clinicWhere = '';
+  if (req.user?.clinicId) {
+    params.push(req.user.clinicId);
+    clinicWhere = ` AND clinic_id = $${params.length}`;
+  }
   const { rows } = await query(
-    `UPDATE patients SET ${sets.join(', ')}, updated_by = $${params.length} WHERE id = $1 RETURNING *`,
+    `UPDATE patients SET ${sets.join(', ')}, updated_by = $${params.length - (req.user?.clinicId ? 1 : 0)} WHERE id = $1${clinicWhere} RETURNING *`,
+    params
+  );
+  if (!rows[0]) throw ApiError.notFound('Patient not found');
     params
   );
   if (!rows[0]) throw ApiError.notFound('Patient not found');
@@ -950,14 +971,14 @@ router.delete('/:id/photos/:photoId', requirePermission('patients.documents'), a
   res.json({ data: { ok: true } });
 }));
 
-async function findDuplicates(body) {
+async function findDuplicates(body, clinicId = null) {
   const { rows } = await query(
     `SELECT id, patient_no, full_name, mobile, dob, created_at
      FROM patients
-     WHERE mobile = $1
-        OR (lower(full_name) = lower($2) AND ($3::date IS NOT NULL AND dob = $3::date))
+     WHERE ($4::uuid IS NULL OR clinic_id = $4)
+       AND (mobile = $1 OR (lower(full_name) = lower($2) AND ($3::date IS NOT NULL AND dob = $3::date)))
      LIMIT 5`,
-    [body.mobile, body.fullName, body.dob || null]
+    [body.mobile, body.fullName, body.dob || null, clinicId]
   );
   return rows;
 }
@@ -966,6 +987,7 @@ function mapPatient(r) {
   if (!r) return null;
   return {
     id: r.id,
+    clinicId: r.clinic_id || null,
     patientNo: r.patient_no,
     fullName: r.full_name,
     dob: r.dob,

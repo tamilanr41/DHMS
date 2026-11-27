@@ -68,6 +68,11 @@ router.get('/', requirePermission('appointments.view'), asyncHandler(async (req,
   const where = ['1=1'];
   const params = [];
 
+  if (req.user?.clinicId) {
+    params.push(req.user.clinicId);
+    where.push(`a.clinic_id = $${params.length}`);
+  }
+
   if (DATE.test(req.query.date || '')) {
     params.push(req.query.date);
     where.push(`a.appointment_date = $${params.length}`);
@@ -117,6 +122,8 @@ router.get('/', requirePermission('appointments.view'), asyncHandler(async (req,
 
 router.get('/queue', requirePermission('queue.view'), asyncHandler(async (req, res) => {
   const date = DATE.test(req.query.date || '') ? req.query.date : todayISO();
+  const clinicWhere = req.user?.clinicId ? 'AND a.clinic_id = $2' : '';
+  const params = req.user?.clinicId ? [date, req.user.clinicId] : [date];
   const { rows } = await query(
     `SELECT a.*, p.full_name AS patient_name, p.patient_no, p.mobile, p.photo_file, p.photo_data, u.full_name AS dentist_name,
             (SELECT count(*) FROM consultations c WHERE c.patient_id = p.id)::int AS visit_count,
@@ -125,9 +132,9 @@ router.get('/queue', requirePermission('queue.view'), asyncHandler(async (req, r
      FROM appointments a
      JOIN patients p ON p.id = a.patient_id
      JOIN users u ON u.id = a.dentist_id
-     WHERE a.appointment_date = $1 AND a.status IN ('checked_in','waiting','in_consultation')
+     WHERE a.appointment_date = $1 AND a.status IN ('checked_in','waiting','in_consultation') ${clinicWhere}
      ORDER BY queued_at NULLS LAST, a.start_time`,
-    [date]
+    params
   );
   res.json({ data: rows.map(mapAppointment) });
 }));
@@ -136,7 +143,7 @@ router.get('/availability', requirePermission('appointments.view'), asyncHandler
   const date = DATE.test(req.query.date || '') ? req.query.date : todayISO();
   const dentistId = req.query.dentistId;
   if (!dentistId) throw ApiError.badRequest('dentistId is required');
-  const clinic = await getClinic();
+  const clinic = await getClinic(req.user?.clinicId);
   const { rows } = await query(
     `SELECT start_time::text, end_time::text, appointment_no, status
      FROM appointments
@@ -164,17 +171,18 @@ router.post('/', requirePermission('appointments.manage'), asyncHandler(async (r
     });
   }
 
+  const clinicId = req.user?.clinicId || null;
   const appointment = await withTransaction(async (client) => {
     const { rows: seq } = await client.query(`SELECT nextval('seq_appointment') AS n`);
     const appointmentNo = `APT-${String(seq[0].n).padStart(6, '0')}`;
     const { rows } = await client.query(
       `INSERT INTO appointments (appointment_no, patient_id, dentist_id, appointment_date, start_time, end_time,
-         appointment_type, reason, booking_source, notes, status, created_by, updated_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$12) RETURNING *`,
+         appointment_type, reason, booking_source, notes, status, created_by, updated_by, clinic_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$12,$13) RETURNING *`,
       [
         appointmentNo, body.patientId, body.dentistId, body.appointmentDate, start, end,
         body.appointmentType || 'consultation', body.reason || null, body.bookingSource || 'reception',
-        body.notes || null, body.status || 'scheduled', req.user.id
+        body.notes || null, body.status || 'scheduled', req.user.id, clinicId
       ]
     );
     await client.query(
@@ -196,12 +204,14 @@ router.post('/', requirePermission('appointments.manage'), asyncHandler(async (r
 
 router.get('/:id', requirePermission('appointments.view'), asyncHandler(async (req, res) => {
   const id = requireId(req.params.id, 'Appointment');
+  const clinicWhere = req.user?.clinicId ? ' AND a.clinic_id = $2' : '';
+  const params = req.user?.clinicId ? [id, req.user.clinicId] : [id];
   const { rows } = await query(
     `SELECT a.*, p.full_name AS patient_name, p.patient_no, p.mobile, p.photo_file, p.photo_data, u.full_name AS dentist_name,
             (SELECT id FROM consultations c WHERE c.appointment_id = a.id ORDER BY created_at DESC LIMIT 1) AS consultation_id
      FROM appointments a JOIN patients p ON p.id = a.patient_id JOIN users u ON u.id = a.dentist_id
-     WHERE a.id = $1`,
-    [id]
+     WHERE a.id = $1${clinicWhere}`,
+    params
   );
   if (!rows[0]) throw ApiError.notFound('Appointment not found');
   const history = await query(

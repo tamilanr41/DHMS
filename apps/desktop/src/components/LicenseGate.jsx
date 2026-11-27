@@ -1,37 +1,69 @@
-import React from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useLocation, Link } from 'react-router-dom';
-import { ShieldAlert, MessageCircle, PhoneCall, LogOut, KeyRound, ExternalLink, RefreshCw } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import {
+  ShieldAlert,
+  MessageCircle,
+  PhoneCall,
+  LogOut,
+  KeyRound,
+  RefreshCw,
+  ServerOff,
+  Activity
+} from 'lucide-react';
+import { api } from '../services/api.js';
 import { useAuth } from '../services/auth.jsx';
+import { useLicenseStatus } from '../hooks/useLicenseStatus.js';
+import { getClientDeviceFingerprint, getClientDeviceInfo } from '../services/deviceFingerprint.js';
+import SetupPage from '../pages/auth/SetupPage.jsx';
+import TamilanApprovalGate from './TamilanApprovalGate.jsx';
+import Button from './ui/Button.jsx';
+import ZhaWaterLoader from './ui/ZhaWaterLoader.jsx';
+
+function BootScreen({ children }) {
+  return (
+    <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-canvas px-6 text-center">
+      <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-navy shadow-card">
+        <Activity size={24} className="text-white" />
+      </span>
+      {children}
+    </div>
+  );
+}
 
 /**
  * LicenseGate (Model B Multi-Tenant SaaS Gate)
- * Allows super-admins and active clinic workspaces to operate smoothly.
- * If a clinic's subscription expires, locks out access to clinical workflows
- * and displays a clean, direct renewal and support interface.
+ * 1. Allows Master Super Admin (/super-admin, /tamilan) without friction.
+ * 2. Unregistered / Pending clinics see the Tamilan Approval Gate (Register & Wait for Approval).
+ * 3. Once approved by Tamilan Admin, opens SetupPage (if first time) or LoginPage.
+ * 4. Active clinics operate with isolated data and tenant branding.
+ * 5. Expired clinic subscriptions are gracefully locked out with renewal options.
  */
 export default function LicenseGate({ children }) {
   const { user, logout } = useAuth();
   const location = useLocation();
+  const [deviceInfo, setDeviceInfo] = useState(null);
 
-  // Always allow unauthenticated paths or the master platform portals
-  const isBypassPath =
-    location.pathname === '/login' ||
-    location.pathname === '/super-admin' ||
-    location.pathname === '/tamilan';
+  // Always allow Tamilan Super Admin portal without gate locking
+  const isSuperAdminPortal =
+    location.pathname === '/super-admin' || location.pathname === '/tamilan';
 
-  if (isBypassPath) {
+  if (isSuperAdminPortal) {
     return children;
   }
 
-  // Master platform owner (no clinicId) has full unfettered access
+  // Master platform owner (admin with no clinicId) has full unfettered access
   if (user?.role === 'admin' && !user?.clinicId) {
     return children;
   }
 
-  // Check if clinic subscription has expired
+  // Check if clinic subscription has expired for logged-in user
   if (user?.clinicId && user?.clinicValidUntil) {
     const validUntilDate = new Date(user.clinicValidUntil);
-    const isExpired = validUntilDate < new Date() || user.clinicStatus === 'expired' || user.clinicStatus === 'suspended';
+    const isExpired =
+      validUntilDate < new Date() ||
+      user.clinicStatus === 'expired' ||
+      user.clinicStatus === 'suspended';
 
     if (isExpired) {
       const clinicLabel = user.clinicName || user.clinicCode || 'Your Dental Practice';
@@ -43,7 +75,6 @@ export default function LicenseGate({ children }) {
       return (
         <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 p-4 font-sans text-slate-100">
           <div className="relative w-full max-w-lg overflow-hidden rounded-2xl border border-red-500/30 bg-slate-900/90 p-8 shadow-2xl backdrop-blur-xl">
-            {/* Ambient Red Glow */}
             <div className="pointer-events-none absolute -top-24 -right-24 h-56 w-56 rounded-full bg-red-600/20 blur-3xl" />
             <div className="pointer-events-none absolute -bottom-24 -left-24 h-56 w-56 rounded-full bg-amber-600/15 blur-3xl" />
 
@@ -63,7 +94,11 @@ export default function LicenseGate({ children }) {
               <p className="mt-2 text-sm text-slate-400">
                 The software subscription for this clinic workspace ended on{' '}
                 <strong className="text-slate-200">
-                  {validUntilDate.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
+                  {validUntilDate.toLocaleDateString(undefined, {
+                    day: 'numeric',
+                    month: 'short',
+                    year: 'numeric'
+                  })}
                 </strong>
                 . Access to patient records, dental charts, appointments, and billing is temporarily locked until renewal.
               </p>
@@ -75,7 +110,6 @@ export default function LicenseGate({ children }) {
                 </div>
               )}
 
-              {/* Renewal Options */}
               <div className="mt-6 flex flex-col gap-3">
                 <a
                   href={whatsappUrl}
@@ -96,7 +130,6 @@ export default function LicenseGate({ children }) {
                 </a>
               </div>
 
-              {/* Action utilities */}
               <div className="mt-6 flex items-center justify-between border-t border-slate-800 pt-4 text-xs">
                 <button
                   type="button"
@@ -133,5 +166,125 @@ export default function LicenseGate({ children }) {
     }
   }
 
+  // Load client device fingerprint
+  useEffect(() => {
+    getClientDeviceFingerprint().then((fingerprint) => {
+      const meta = getClientDeviceInfo();
+      setDeviceInfo({ fingerprint, ...meta });
+    });
+  }, []);
+
+  // 1. Device Seat / System Lock Verification via Tamilan API
+  const [clinicCodeState, setClinicCodeState] = useState(
+    () => (typeof window !== 'undefined' ? localStorage.getItem('zhanx_my_clinic_code') : null)
+  );
+
+  const safeClinicCode = typeof clinicCodeState === 'string' ? clinicCodeState : null;
+
+  const deviceQuery = useQuery({
+    queryKey: ['tamilan-device-verify', deviceInfo?.fingerprint, safeClinicCode],
+    queryFn: async () => {
+      if (!deviceInfo?.fingerprint) return null;
+      const activeCode =
+        (typeof window !== 'undefined' ? localStorage.getItem('zhanx_my_clinic_code') : null) ||
+        safeClinicCode;
+      const res = await api.post('/tamilan/device/verify', {
+        clinicCode: activeCode || undefined,
+        deviceFingerprint: deviceInfo.fingerprint,
+        deviceName: deviceInfo.deviceName,
+        osPlatform: deviceInfo.osPlatform,
+        browserInfo: deviceInfo.browserInfo
+      });
+      return (res?.data?.allowed !== undefined ? res.data : res) ?? null;
+    },
+    enabled: Boolean(deviceInfo?.fingerprint),
+    staleTime: 5_000
+  });
+
+  // 2. License Status
+  const { data, isLoading, error, refetch, isFetching } = useLicenseStatus();
+
+  const handleRetry = useCallback(
+    (newCode) => {
+      if (typeof newCode === 'string') {
+        setClinicCodeState(newCode);
+      } else if (newCode === null) {
+        setClinicCodeState(null);
+      }
+      deviceQuery.refetch();
+      refetch();
+    },
+    [deviceQuery, refetch]
+  );
+
+  // If already logged in to an active session, render children
+  if (user) {
+    return children;
+  }
+
+  // Initial loading indicator before data arrives
+  const isInitialLoading =
+    (isLoading && !data) ||
+    (Boolean(deviceInfo) && deviceQuery.isLoading && !deviceQuery.data);
+
+  if (isInitialLoading) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#050b14]/90 backdrop-blur-xl">
+        <ZhaWaterLoader
+          progress={50}
+          autoAnimate
+          statusText="Checking clinic workstation authorization…"
+          tamilStatusText="கணினி மற்றும் உரிமம் சரிபார்க்கப்படுகிறது…"
+        />
+      </div>
+    );
+  }
+
+  if (error && !deviceQuery.data) {
+    return (
+      <BootScreen>
+        <div className="max-w-md space-y-3">
+          <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-red-50 text-red-700">
+            <ServerOff size={20} />
+          </div>
+          <h1 className="text-lg font-semibold text-navy">Cannot reach the clinic server</h1>
+          <p className="text-sm text-slate-500">{error.message}</p>
+          <p className="text-xs text-slate-400">
+            Make sure the ZhanX clinic service is running on the server, then retry.
+          </p>
+          <Button icon={RefreshCw} onClick={handleRetry} loading={isFetching}>
+            Retry connection
+          </Button>
+        </div>
+      </BootScreen>
+    );
+  }
+
+  // 1. Check Cloud Approval Status & Registration Gate
+  if (!deviceQuery.data || !deviceQuery.data.allowed) {
+    return (
+      <TamilanApprovalGate
+        verification={deviceQuery.data || { allowed: false, reason: 'REGISTER_REQUIRED' }}
+        onRetry={handleRetry}
+      />
+    );
+  }
+
+  // 2. Initial Setup if clinic is active but no admin user created yet
+  if (data?.setupRequired) {
+    return (
+      <SetupPage
+        status={{
+          ...data,
+          clinicId: deviceQuery.data?.clinic?.id || data?.clinicId,
+          clinicCode: deviceQuery.data?.clinic?.clinic_code || data?.clinicCode,
+          clinicName: deviceQuery.data?.clinic?.clinic_name || data?.license?.clinicName,
+          dentistName: deviceQuery.data?.clinic?.doctor_name || data?.license?.dentistName
+        }}
+      />
+    );
+  }
+
+  // 3. Approved & Initialized -> Render Login / Clinic App!
   return children;
 }

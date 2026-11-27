@@ -43,11 +43,60 @@ export default function LicenseGate({ children }) {
   const { user, logout } = useAuth();
   const location = useLocation();
   const [deviceInfo, setDeviceInfo] = useState(null);
+  const [clinicCodeState, setClinicCodeState] = useState(
+    () => (typeof window !== 'undefined' ? localStorage.getItem('zhanx_my_clinic_code') : null)
+  );
 
-  // Always allow Tamilan Super Admin portal without gate locking
+  // Load client device fingerprint
+  useEffect(() => {
+    getClientDeviceFingerprint().then((fingerprint) => {
+      const meta = getClientDeviceInfo();
+      setDeviceInfo({ fingerprint, ...meta });
+    });
+  }, []);
+
   const isSuperAdminPortal =
     location.pathname === '/super-admin' || location.pathname === '/tamilan';
 
+  const safeClinicCode = typeof clinicCodeState === 'string' ? clinicCodeState : null;
+
+  const deviceQuery = useQuery({
+    queryKey: ['tamilan-device-verify', deviceInfo?.fingerprint, safeClinicCode],
+    queryFn: async () => {
+      if (!deviceInfo?.fingerprint) return null;
+      const activeCode =
+        (typeof window !== 'undefined' ? localStorage.getItem('zhanx_my_clinic_code') : null) ||
+        safeClinicCode;
+      const res = await api.post('/tamilan/device/verify', {
+        clinicCode: activeCode || undefined,
+        deviceFingerprint: deviceInfo.fingerprint,
+        deviceName: deviceInfo.deviceName,
+        osPlatform: deviceInfo.osPlatform,
+        browserInfo: deviceInfo.browserInfo
+      });
+      return (res?.data?.allowed !== undefined ? res.data : res) ?? null;
+    },
+    enabled: Boolean(deviceInfo?.fingerprint) && !isSuperAdminPortal,
+    staleTime: 5_000
+  });
+
+  // 2. License Status
+  const { data, isLoading, error, refetch, isFetching } = useLicenseStatus();
+
+  const handleRetry = useCallback(
+    (newCode) => {
+      if (typeof newCode === 'string') {
+        setClinicCodeState(newCode);
+      } else if (newCode === null) {
+        setClinicCodeState(null);
+      }
+      deviceQuery.refetch();
+      refetch();
+    },
+    [deviceQuery, refetch]
+  );
+
+  // Always allow Tamilan Super Admin portal without gate locking
   if (isSuperAdminPortal) {
     return children;
   }
@@ -165,57 +214,6 @@ export default function LicenseGate({ children }) {
       );
     }
   }
-
-  // Load client device fingerprint
-  useEffect(() => {
-    getClientDeviceFingerprint().then((fingerprint) => {
-      const meta = getClientDeviceInfo();
-      setDeviceInfo({ fingerprint, ...meta });
-    });
-  }, []);
-
-  // 1. Device Seat / System Lock Verification via Tamilan API
-  const [clinicCodeState, setClinicCodeState] = useState(
-    () => (typeof window !== 'undefined' ? localStorage.getItem('zhanx_my_clinic_code') : null)
-  );
-
-  const safeClinicCode = typeof clinicCodeState === 'string' ? clinicCodeState : null;
-
-  const deviceQuery = useQuery({
-    queryKey: ['tamilan-device-verify', deviceInfo?.fingerprint, safeClinicCode],
-    queryFn: async () => {
-      if (!deviceInfo?.fingerprint) return null;
-      const activeCode =
-        (typeof window !== 'undefined' ? localStorage.getItem('zhanx_my_clinic_code') : null) ||
-        safeClinicCode;
-      const res = await api.post('/tamilan/device/verify', {
-        clinicCode: activeCode || undefined,
-        deviceFingerprint: deviceInfo.fingerprint,
-        deviceName: deviceInfo.deviceName,
-        osPlatform: deviceInfo.osPlatform,
-        browserInfo: deviceInfo.browserInfo
-      });
-      return (res?.data?.allowed !== undefined ? res.data : res) ?? null;
-    },
-    enabled: Boolean(deviceInfo?.fingerprint),
-    staleTime: 5_000
-  });
-
-  // 2. License Status
-  const { data, isLoading, error, refetch, isFetching } = useLicenseStatus();
-
-  const handleRetry = useCallback(
-    (newCode) => {
-      if (typeof newCode === 'string') {
-        setClinicCodeState(newCode);
-      } else if (newCode === null) {
-        setClinicCodeState(null);
-      }
-      deviceQuery.refetch();
-      refetch();
-    },
-    [deviceQuery, refetch]
-  );
 
   // If already logged in to an active session, render children
   if (user) {

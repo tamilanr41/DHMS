@@ -82,6 +82,11 @@ export default function TamilanAdminPage() {
   const [deleteConfirmClinic, setDeleteConfirmClinic] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // Factory Reset States
+  const [factoryResetModalOpen, setFactoryResetModalOpen] = useState(false);
+  const [resetConfirmKey, setResetConfirmKey] = useState('');
+  const [isResetting, setIsResetting] = useState(false);
+
   // WhatsApp Templates Modal
   const [whatsappModalOpen, setWhatsappModalOpen] = useState(false);
   const [whatsappClinic, setWhatsappClinic] = useState(null);
@@ -366,6 +371,25 @@ export default function TamilanAdminPage() {
       toast.error(err.message || 'Failed to delete clinic');
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  const handleFactoryReset = async () => {
+    if (resetConfirmKey !== 'tamilan' && resetConfirmKey !== '7788') {
+      toast.error('Invalid confirmation key. Please enter "tamilan" to confirm.');
+      return;
+    }
+    setIsResetting(true);
+    try {
+      const res = await api.post('/tamilan/factory-reset', { confirmationKey: resetConfirmKey });
+      toast.success(res?.message || 'All clinics and data purged! System is 100% fresh.');
+      setFactoryResetModalOpen(false);
+      setResetConfirmKey('');
+      queryClient.invalidateQueries();
+    } catch (err) {
+      toast.error(err.response?.data?.message || err.message || 'Factory reset failed');
+    } finally {
+      setIsResetting(false);
     }
   };
 
@@ -1550,6 +1574,31 @@ If you or your staff have any questions regarding patient charts, prescriptions,
                 </div>
               </div>
             </div>
+
+            {/* Danger Zone: Master Factory Reset */}
+            <div className="rounded-3xl border border-rose-300/80 bg-rose-50/40 p-5 dark:bg-rose-950/20 dark:border-rose-900/50 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="space-y-1">
+                  <h4 className="text-xs font-black uppercase tracking-wider text-rose-700 dark:text-rose-400 flex items-center gap-2">
+                    <Trash2 size={16} />
+                    Danger Zone: Master Factory Reset (Start 100% Fresh)
+                  </h4>
+                  <p className="text-xs text-rose-800/80 dark:text-rose-300/80 max-w-2xl leading-relaxed">
+                    Purge all clinic tenants, user accounts, patients, appointments, dental charts, prescriptions, and invoices. Master roles and permissions are preserved so clinics can register fresh from scratch.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setResetConfirmKey('');
+                    setFactoryResetModalOpen(true);
+                  }}
+                  className="rounded-xl bg-rose-600 px-4 py-2.5 text-xs font-black text-white hover:bg-rose-700 shadow-md shadow-rose-600/20 transition cursor-pointer"
+                >
+                  Wipe All Data &amp; Start Fresh
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>
@@ -2433,6 +2482,70 @@ If you or your staff have any questions regarding patient charts, prescriptions,
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* ========================================================================= */}
+      {/* FACTORY RESET CONFIRMATION MODAL                                          */}
+      {/* ========================================================================= */}
+      <Modal
+        open={factoryResetModalOpen}
+        onClose={() => setFactoryResetModalOpen(false)}
+        title="⚠️ Confirm Master Factory Reset"
+        subtitle="This action will permanently purge all clinic records, users, and clinical data."
+        size="md"
+      >
+        <div className="space-y-4 text-xs">
+          <div className="rounded-2xl border border-rose-300 bg-rose-50/70 p-4 text-rose-800 dark:bg-rose-950/40 dark:border-rose-900/60 dark:text-rose-300 space-y-2">
+            <p className="font-black text-sm">Are you absolutely sure?</p>
+            <p className="leading-relaxed">
+              This will permanently delete <strong>all registered clinics, staff logins, patients, appointments, invoices, dental charts, and payments</strong>.
+            </p>
+            <p className="font-semibold text-[11px] text-rose-700 dark:text-rose-400">
+              ✓ Master roles, permissions, and security keys will remain intact so you can onboard new clinics cleanly.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+              Type <span className="font-mono font-black text-rose-600">tamilan</span> to confirm:
+            </label>
+            <input
+              type="text"
+              value={resetConfirmKey}
+              onChange={(e) => setResetConfirmKey(e.target.value)}
+              placeholder="tamilan"
+              className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-xs font-bold text-slate-900 focus:border-rose-500 focus:outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white"
+            />
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+            <button
+              type="button"
+              onClick={() => setFactoryResetModalOpen(false)}
+              className="rounded-xl border border-slate-200 px-4 py-2 font-bold text-slate-600 hover:bg-slate-50 transition cursor-pointer dark:border-slate-700 dark:text-slate-300"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleFactoryReset}
+              disabled={resetConfirmKey !== 'tamilan' && resetConfirmKey !== '7788' || isResetting}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-rose-600 px-5 py-2 font-black text-white hover:bg-rose-700 shadow-md transition cursor-pointer disabled:opacity-40"
+            >
+              {isResetting ? (
+                <>
+                  <RefreshCw size={13} className="animate-spin" />
+                  Wiping System...
+                </>
+              ) : (
+                <>
+                  <Trash2 size={13} />
+                  Confirm &amp; Factory Reset Now
+                </>
+              )}
+            </button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

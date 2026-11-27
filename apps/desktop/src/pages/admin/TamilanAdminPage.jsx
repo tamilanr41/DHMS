@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ShieldCheck, Users, Wallet, Clock, CheckCircle2, AlertTriangle,
@@ -7,13 +8,14 @@ import {
   Building2, Laptop, CalendarClock, ChevronRight, UserCheck,
   ExternalLink, Wrench, ShieldAlert, Cpu, Stethoscope, Calendar,
   FileText, Activity, Unlock, Sliders, Trash2, Database, HardDrive,
-  Copy, PlusCircle, Server, Cloud, Globe, Share2
+  Copy, PlusCircle, Server, Cloud, Globe, Share2, Eye, EyeOff, User
 } from 'lucide-react';
 import { api, setAccessToken } from '../../services/api.js';
 import { useToast } from '../../components/ui/Toast.jsx';
 import { formatDate, formatDateTime, formatMoney } from '../../utils/format.js';
 import DoccureKpiCard from '../../components/ui/DoccureKpiCard.jsx';
 import heroTooth from '../../assets/dental/hero-tooth.svg';
+import Logo from '../../components/ui/Logo.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
 
 const ALL_MODULES = [
@@ -32,11 +34,13 @@ export default function TamilanAdminPage() {
   const toast = useToast();
   const queryClient = useQueryClient();
 
-  // Master Pin Protection
+  // Master Authentication Protection
   const [authPin, setAuthPin] = useState(() => localStorage.getItem('tamilan_pin_session') || '');
+  const [usernameInput, setUsernameInput] = useState('tamilan');
   const [pinInput, setPinInput] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [pinError, setPinError] = useState(false);
-  const isAuthenticated = authPin === '7788';
+  const isAuthenticated = authPin === 'tamilan' || authPin === '7788';
 
   const [activeTab, setActiveTab] = useState('live'); // live | clinics | payments | database
   const [search, setSearch] = useState('');
@@ -161,14 +165,15 @@ export default function TamilanAdminPage() {
 
   const handlePinSubmit = (e) => {
     e.preventDefault();
-    if (pinInput.trim() === '7788') {
-      setAuthPin('7788');
-      localStorage.setItem('tamilan_pin_session', '7788');
+    const cleanKey = pinInput.trim().toLowerCase();
+    if (cleanKey === 'tamilan' || cleanKey === '7788') {
+      setAuthPin('tamilan');
+      localStorage.setItem('tamilan_pin_session', 'tamilan');
       setPinError(false);
-      toast.success('Welcome Master Admin!');
+      toast.success('Welcome Master Platform Admin!');
     } else {
       setPinError(true);
-      toast.error('Invalid Master PIN. Please enter correct authorization code.');
+      toast.error('Invalid Master Security Key. Please verify your credentials.');
     }
   };
 
@@ -474,59 +479,205 @@ If you or your staff have any questions regarding patient charts, prescriptions,
     });
   }, [clinicsQuery.data, search, statusFilter]);
 
-  // Master Pin Gate Screen
+  // Master Authentication Gate Screen
   if (!isAuthenticated) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-[#073038] p-4 text-white">
-        <div className="w-full max-w-md rounded-3xl border border-teal-500/30 bg-slate-900/90 p-8 shadow-2xl backdrop-blur-2xl text-center space-y-6">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-tr from-[#009da6] to-[#08636d] text-white shadow-lg shadow-teal-500/25">
-            <ShieldCheck size={32} />
-          </div>
+      <main className="relative flex min-h-screen min-h-[100dvh] overflow-y-auto bg-[#0b1220] text-white selection:bg-teal-500 selection:text-white">
+        {/* Background Image & Ambient Gradients */}
+        <img
+          src="/bg_img.png"
+          alt=""
+          aria-hidden="true"
+          className="pointer-events-none fixed inset-0 h-full w-full object-cover opacity-60"
+        />
+        <div
+          className="pointer-events-none fixed inset-0 bg-gradient-to-r from-[#0b1220]/95 via-[#0f172a]/85 to-[#0b1220]/60"
+          aria-hidden="true"
+        />
+        <div
+          className="pointer-events-none fixed inset-0"
+          style={{
+            backgroundImage:
+              'radial-gradient(1100px 600px at -10% -10%, rgba(0,157,166,0.22), transparent 60%), radial-gradient(900px 560px at 110% 115%, rgba(14,165,233,0.18), transparent 55%)'
+          }}
+          aria-hidden="true"
+        />
 
+        {/* Left Branding Column (Visible on Desktop) */}
+        <section className="relative hidden w-[48%] flex-col justify-between p-10 lg:flex xl:p-14 z-10">
           <div>
-            <span className="rounded-full bg-teal-500/10 px-3 py-1 text-xs font-black uppercase tracking-wider text-[#009da6] border border-teal-500/20">
-              Restricted Master Console
-            </span>
-            <h1 className="mt-3 text-2xl font-black tracking-tight text-white">
-              Enterprise Master Admin
-            </h1>
-            <p className="mt-1 text-xs font-medium text-slate-400">
-              Enter master security authorization PIN to manage multi-clinic licenses, solve clinic issues &amp; control subscriptions.
-            </p>
-          </div>
-
-          <form onSubmit={handlePinSubmit} className="space-y-4">
-            <div className="relative">
-              <KeyRound size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="password"
-                maxLength={8}
-                value={pinInput}
-                onChange={(e) => setPinInput(e.target.value)}
-                placeholder="Enter 4-digit Master PIN (7788)"
-                className="w-full rounded-2xl border border-slate-700 bg-slate-800/80 pl-11 pr-4 py-3 text-sm font-black tracking-widest text-center text-white placeholder-slate-500 focus:border-[#009da6] focus:outline-none focus:ring-2 focus:ring-[#009da6]/20 transition"
-              />
+            <div className="flex items-center gap-3">
+              <Logo className="h-11 w-11" />
+              <span className="leading-tight">
+                <span className="block font-display text-lg font-extrabold tracking-tight text-white">
+                  ZHANX <span className="bg-gradient-to-r from-teal-300 to-cyan-300 bg-clip-text text-transparent">DENTALCARE</span>
+                </span>
+                <span className="block text-[11px] font-semibold uppercase tracking-[0.2em] text-teal-400">
+                  Master Platform Console
+                </span>
+              </span>
             </div>
 
-            {pinError && (
-              <p className="text-xs font-bold text-rose-400 animate-shake">
-                Incorrect Master PIN. Please retry.
+            <div className="mt-14 max-w-md">
+              <div className="mb-4">
+                <img
+                  src={heroTooth}
+                  alt="Doccure 3D Mascot"
+                  className="size-24 object-contain animate-float-doccure drop-shadow-[0_15px_30px_rgba(0,157,166,0.4)]"
+                />
+              </div>
+
+              <p className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.22em] text-teal-400">
+                <ShieldCheck className="h-3.5 w-3.5" />
+                Enterprise Multi-Tenant SaaS
               </p>
-            )}
+              <h1 className="mt-3 font-display text-4xl font-bold leading-[1.1] tracking-tight xl:text-5xl text-white">
+                Master control,
+                <br />
+                <span className="bg-gradient-to-r from-teal-300 via-cyan-300 to-white bg-clip-text text-transparent">
+                  governed simply.
+                </span>
+              </h1>
+              <p className="mt-4 max-w-md text-[14px] leading-relaxed text-slate-300">
+                Centralized multi-clinic tenant provisioning, licensing approvals, automated database health telemetry, and subscription enforcement for all ZhanX practices.
+              </p>
+            </div>
 
-            <button
-              type="submit"
-              className="w-full rounded-2xl bg-gradient-to-r from-[#009da6] to-[#08636d] py-3 text-xs font-black text-white hover:opacity-95 shadow-lg shadow-teal-700/30 transition cursor-pointer"
-            >
-              Unlock Master Console →
-            </button>
-          </form>
+            <ul className="mt-10 grid grid-cols-2 gap-4">
+              <li className="flex items-center gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-teal-400">
+                  <Building2 size={18} />
+                </span>
+                <span className="leading-tight">
+                  <span className="block text-xs font-bold text-white">Clinic Provisioning</span>
+                  <span className="block text-[11px] text-slate-400">Instant tenant setup</span>
+                </span>
+              </li>
+              <li className="flex items-center gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-teal-400">
+                  <CheckCircle2 size={18} />
+                </span>
+                <span className="leading-tight">
+                  <span className="block text-xs font-bold text-white">Pending Approvals</span>
+                  <span className="block text-[11px] text-slate-400">One-click activation</span>
+                </span>
+              </li>
+              <li className="flex items-center gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-teal-400">
+                  <Database size={18} />
+                </span>
+                <span className="leading-tight">
+                  <span className="block text-xs font-bold text-white">Database Health</span>
+                  <span className="block text-[11px] text-slate-400">Live storage monitoring</span>
+                </span>
+              </li>
+              <li className="flex items-center gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-teal-400">
+                  <Activity size={18} />
+                </span>
+                <span className="leading-tight">
+                  <span className="block text-xs font-bold text-white">Realtime Telemetry</span>
+                  <span className="block text-[11px] text-slate-400">Live clinical actions</span>
+                </span>
+              </li>
+            </ul>
+          </div>
 
-          <p className="text-[11px] text-slate-500 font-mono">
-            Default Master Security PIN: <strong>7788</strong>
-          </p>
-        </div>
-      </div>
+          <div className="flex items-center justify-between text-xs text-slate-400">
+            <span>ZhanX SaaS Engine v2.4.0 · Tamilan Edition</span>
+            <span>Secured with AES-256</span>
+          </div>
+        </section>
+
+        {/* Right Form Column */}
+        <section className="relative flex flex-1 items-center justify-center p-6 sm:p-10 z-10">
+          <div className="w-full max-w-md rounded-3xl border border-slate-700/60 bg-slate-900/85 p-8 shadow-2xl backdrop-blur-2xl">
+            <div className="text-center">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-tr from-[#009da6] to-[#08636d] text-white shadow-lg shadow-teal-500/25">
+                <ShieldCheck size={28} />
+              </div>
+
+              <span className="mt-4 inline-block rounded-full border border-teal-500/30 bg-teal-500/10 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-teal-300">
+                Super Admin Access
+              </span>
+              <h2 className="mt-2 text-2xl font-black tracking-tight text-white">
+                Master Platform Login
+              </h2>
+              <p className="mt-1 text-xs text-slate-400">
+                Sign in to manage multi-clinic workspaces, subscriptions, and system operations.
+              </p>
+            </div>
+
+            <form onSubmit={handlePinSubmit} className="mt-6 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  Platform Username
+                </label>
+                <div className="relative">
+                  <User size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    value={usernameInput}
+                    onChange={(e) => setUsernameInput(e.target.value)}
+                    placeholder="Enter platform username"
+                    className="w-full rounded-xl border border-slate-700 bg-slate-800/80 pl-10 pr-4 py-2.5 text-sm font-semibold text-white placeholder-slate-500 focus:border-[#009da6] focus:outline-none focus:ring-2 focus:ring-[#009da6]/20 transition"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  Master Security Key
+                </label>
+                <div className="relative">
+                  <KeyRound size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={pinInput}
+                    onChange={(e) => {
+                      setPinInput(e.target.value);
+                      if (pinError) setPinError(false);
+                    }}
+                    placeholder="Enter master authorization key"
+                    className="w-full rounded-xl border border-slate-700 bg-slate-800/80 pl-10 pr-11 py-2.5 text-sm font-semibold text-white placeholder-slate-500 focus:border-[#009da6] focus:outline-none focus:ring-2 focus:ring-[#009da6]/20 transition"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
+                  >
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+
+              {pinError && (
+                <div className="flex items-center gap-2 rounded-lg bg-rose-500/10 border border-rose-500/20 px-3 py-2 text-xs font-medium text-rose-400">
+                  <AlertTriangle size={14} className="shrink-0" />
+                  <span>Invalid Master Authorization Key. Access denied.</span>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#009da6] to-[#08636d] py-3 text-sm font-bold text-white shadow-lg shadow-teal-500/25 hover:opacity-95 active:scale-98 transition cursor-pointer"
+              >
+                <span>Unlock Master Console</span>
+                <ArrowRight size={16} />
+              </button>
+            </form>
+
+            <div className="mt-6 border-t border-slate-800 pt-4 text-center">
+              <Link
+                to="/login"
+                className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-teal-400 transition"
+              >
+                <span>← Back to Clinic Workstation Login</span>
+              </Link>
+            </div>
+          </div>
+        </section>
+      </main>
     );
   }
 

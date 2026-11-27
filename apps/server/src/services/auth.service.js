@@ -115,11 +115,11 @@ export async function login({ username, password, clinicCode }, req) {
   // drops them; pass an explicit shape for the audit entry.
   const auditReq = req
     ? {
-        user: { id: user.id, username: user.username },
-        headers: { ...req.headers },
-        ip: req.ip,
-        socket: { remoteAddress: req.socket?.remoteAddress }
-      }
+      user: { id: user.id, username: user.username },
+      headers: { ...req.headers },
+      ip: req.ip,
+      socket: { remoteAddress: req.socket?.remoteAddress }
+    }
     : null;
   await logAudit(null, auditReq, {
     action: 'auth.login',

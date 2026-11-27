@@ -36,6 +36,10 @@ const prescriptionSchema = z.object({
 router.get('/', requirePermission('prescriptions.view'), asyncHandler(async (req, res) => {
   const where = ['1=1'];
   const params = [];
+  if (req.user?.clinicId) {
+    params.push(req.user.clinicId);
+    where.push(`(p.clinic_id = $${params.length} OR pt.clinic_id = $${params.length})`);
+  }
   if (req.query.patientId) {
     params.push(req.query.patientId);
     where.push(`p.patient_id = $${params.length}`);
@@ -72,7 +76,10 @@ router.post('/', requirePermission('prescriptions.manage'), asyncHandler(async (
     [dentistId]
   );
   if (!dentist.rowCount) throw ApiError.badRequest('Selected dentist is not valid');
-  const patient = await query('SELECT 1 FROM patients WHERE id = $1', [body.patientId]);
+  const patient = await query(
+    `SELECT 1 FROM patients WHERE id = $1 ${req.user?.clinicId ? 'AND clinic_id = $2' : ''}`,
+    req.user?.clinicId ? [body.patientId, req.user.clinicId] : [body.patientId]
+  );
   if (!patient.rowCount) throw ApiError.notFound('Patient not found');
 
   const safety = await checkMedicationSafety({ patientId: body.patientId, items: body.items });
@@ -90,9 +97,9 @@ router.post('/', requirePermission('prescriptions.manage'), asyncHandler(async (
     const no = `${prefix}-${String(seq[0].n).padStart(6, '0')}`;
     const { rows } = await client.query(
       `INSERT INTO prescriptions (prescription_no, patient_id, dentist_id, consultation_id, prescription_date,
-         allergies_noted, notes, follow_up_date, safety_flags, safety_override_reason, created_by)
-       VALUES ($1,$2,$3,$4,COALESCE($5::date, CURRENT_DATE),$6,$7,$8,$9,$10,$11) RETURNING *`,
-      [no, body.patientId, dentistId, body.consultationId || null, body.prescriptionDate || null, body.allergiesNoted || null, body.notes || null, body.followUpDate || null, JSON.stringify(safety.flags), body.safetyOverrideReason || null, req.user.id]
+         allergies_noted, notes, follow_up_date, safety_flags, safety_override_reason, created_by, clinic_id)
+       VALUES ($1,$2,$3,$4,COALESCE($5::date, CURRENT_DATE),$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
+      [no, body.patientId, dentistId, body.consultationId || null, body.prescriptionDate || null, body.allergiesNoted || null, body.notes || null, body.followUpDate || null, JSON.stringify(safety.flags), body.safetyOverrideReason || null, req.user.id, req.user?.clinicId || null]
     );
     for (let i = 0; i < body.items.length; i++) {
       const item = body.items[i];
@@ -105,8 +112,8 @@ router.post('/', requirePermission('prescriptions.manage'), asyncHandler(async (
     return rows[0];
   });
 
-  await logAudit(null, req, { action: 'prescription.created', entityType: 'prescription', entityId: prescription.id, details: { prescriptionNo: prescription.prescription_no, patientId: body.patientId, medicines: body.items.length } });
-  res.status(201).json({ data: await fetchPrescription(prescription.id) });
+  await logAudit(null, req, { action: 'prescription.created', entityType: 'prescription', entityId: prescription.id, details: { prescriptionNo: prescription.prescription_no, patientId: body.patientId, medicines: body.items.length, clinicId: req.user?.clinicId } });
+  res.status(201).json({ data: await fetchPrescription(prescription.id, req.user?.clinicId) });
 }));
 
 const medicineSchema = z.object({
@@ -258,20 +265,20 @@ router.post('/safety-check', requirePermission('prescriptions.view'), asyncHandl
 
 router.get('/:id', requirePermission('prescriptions.view'), asyncHandler(async (req, res) => {
   const id = requireId(req.params.id, 'Prescription');
-  const prescription = await fetchPrescription(id);
+  const prescription = await fetchPrescription(id, req.user?.clinicId);
   if (!prescription) throw ApiError.notFound('Prescription not found');
   res.json({ data: prescription });
 }));
 
 router.get('/:id/pdf', requirePermission('prescriptions.view'), asyncHandler(async (req, res) => {
   const id = requireId(req.params.id, 'Prescription');
-  const prescription = await fetchPrescription(id);
+  const prescription = await fetchPrescription(id, req.user?.clinicId);
   if (!prescription) throw ApiError.notFound('Prescription not found');
   await streamPrescription(prescription, res);
-  await logAudit(null, req, { action: 'prescription.printed', entityType: 'prescription', entityId: id });
+  await logAudit(null, req, { action: 'prescription.printed', entityType: 'prescription', entityId: id, details: { clinicId: req.user?.clinicId } });
 }));
 
-async function fetchPrescription(id) {
+async function fetchPrescription(id, clinicId) {
   const { rows } = await query(
     `SELECT p.*, pt.full_name AS patient_name, pt.patient_no, pt.mobile, pt.dob, pt.gender, pt.address, pt.photo_file, pt.photo_data,
             date_part('year', age(pt.dob))::int AS age, u.full_name AS dentist_name,
@@ -280,8 +287,8 @@ async function fetchPrescription(id) {
      JOIN patients pt ON pt.id = p.patient_id
      JOIN users u ON u.id = p.dentist_id
      LEFT JOIN consultations c ON c.id = p.consultation_id
-     WHERE p.id = $1`,
-    [id]
+     WHERE p.id = $1 ${clinicId ? 'AND (p.clinic_id = $2 OR pt.clinic_id = $2)' : ''}`,
+    clinicId ? [id, clinicId] : [id]
   );
   if (!rows[0]) return null;
   const items = await query('SELECT * FROM prescription_items WHERE prescription_id = $1 ORDER BY sort_order, id', [id]);

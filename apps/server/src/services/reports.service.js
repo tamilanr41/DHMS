@@ -2,14 +2,19 @@ import { query } from '../database/db.js';
 
 const money = 'money';
 
+function clinicWhere(user, col = 'clinic_id') {
+  if (!user?.clinicId) return '';
+  return `AND ${col} = '${user.clinicId}'`;
+}
+
 const REPORTS = {
   patients: {
     title: 'Patient registrations',
     permission: 'reports.view',
     dateColumn: 'registration date',
-    run: ({ start, end }) => query(
+    run: ({ start, end, user }) => query(
       `SELECT patient_no, full_name, gender, dob, mobile, email, address, created_at::date AS registered_on
-       FROM patients WHERE created_at::date BETWEEN $1 AND $2 ORDER BY created_at DESC`,
+       FROM patients WHERE created_at::date BETWEEN $1 AND $2 ${clinicWhere(user)} ORDER BY created_at DESC`,
       [start, end]
     ),
     columns: [
@@ -24,11 +29,11 @@ const REPORTS = {
   'patient-visits': {
     title: 'Patient visits',
     permission: 'reports.view',
-    run: ({ start, end }) => query(
+    run: ({ start, end, user }) => query(
       `SELECT c.consultation_no, c.visit_at::date AS visit_date, p.patient_no, p.full_name AS patient,
               u.full_name AS dentist, c.diagnosis, c.status
        FROM consultations c JOIN patients p ON p.id = c.patient_id JOIN users u ON u.id = c.dentist_id
-       WHERE c.visit_at::date BETWEEN $1 AND $2 ORDER BY c.visit_at DESC`,
+       WHERE c.visit_at::date BETWEEN $1 AND $2 ${clinicWhere(user, 'p.clinic_id')} ORDER BY c.visit_at DESC`,
       [start, end]
     ),
     columns: [
@@ -44,12 +49,12 @@ const REPORTS = {
   appointments: {
     title: 'Daily appointments',
     permission: 'reports.view',
-    run: ({ start, end }) => query(
+    run: ({ start, end, user }) => query(
       `SELECT a.appointment_no, a.appointment_date, a.start_time::text, a.end_time::text,
               p.patient_no, p.full_name AS patient, u.full_name AS dentist,
               replace(a.appointment_type,'_',' ') AS type, replace(a.status,'_',' ') AS status
        FROM appointments a JOIN patients p ON p.id = a.patient_id JOIN users u ON u.id = a.dentist_id
-       WHERE a.appointment_date BETWEEN $1 AND $2 ORDER BY a.appointment_date, a.start_time`,
+       WHERE a.appointment_date BETWEEN $1 AND $2 ${clinicWhere(user, 'a.clinic_id')} ORDER BY a.appointment_date, a.start_time`,
       [start, end]
     ),
     columns: [
@@ -67,11 +72,11 @@ const REPORTS = {
   'cancelled-appointments': {
     title: 'Cancelled appointments',
     permission: 'reports.view',
-    run: ({ start, end }) => query(
+    run: ({ start, end, user }) => query(
       `SELECT a.appointment_no, a.appointment_date, a.start_time::text, p.patient_no, p.full_name AS patient,
               u.full_name AS dentist, a.reason
        FROM appointments a JOIN patients p ON p.id = a.patient_id JOIN users u ON u.id = a.dentist_id
-       WHERE a.status = 'cancelled' AND a.appointment_date BETWEEN $1 AND $2 ORDER BY a.appointment_date DESC`,
+       WHERE a.status = 'cancelled' AND a.appointment_date BETWEEN $1 AND $2 ${clinicWhere(user, 'a.clinic_id')} ORDER BY a.appointment_date DESC`,
       [start, end]
     ),
     columns: [
@@ -87,11 +92,11 @@ const REPORTS = {
   'no-show-appointments': {
     title: 'No-show appointments',
     permission: 'reports.view',
-    run: ({ start, end }) => query(
+    run: ({ start, end, user }) => query(
       `SELECT a.appointment_no, a.appointment_date, a.start_time::text, p.patient_no, p.full_name AS patient,
               u.full_name AS dentist
        FROM appointments a JOIN patients p ON p.id = a.patient_id JOIN users u ON u.id = a.dentist_id
-       WHERE a.status = 'no_show' AND a.appointment_date BETWEEN $1 AND $2 ORDER BY a.appointment_date DESC`,
+       WHERE a.status = 'no_show' AND a.appointment_date BETWEEN $1 AND $2 ${clinicWhere(user, 'a.clinic_id')} ORDER BY a.appointment_date DESC`,
       [start, end]
     ),
     columns: [
@@ -127,13 +132,13 @@ const REPORTS = {
   'collections-daily': {
     title: 'Daily collection',
     permission: 'reports.financial',
-    run: ({ start, end }) => query(
+    run: ({ start, end, user }) => query(
       `WITH days AS (SELECT generate_series($1::date, $2::date, '1 day')::date AS d)
        SELECT to_char(days.d, 'YYYY-MM-DD') AS date,
-              COALESCE((SELECT sum(amount) FROM payments WHERE status='completed' AND payment_date::date = days.d),0) AS collected,
-              COALESCE((SELECT sum(amount) FROM refunds WHERE refunded_at::date = days.d),0) AS refunded,
-              COALESCE((SELECT sum(amount) FROM payments WHERE status='completed' AND method='Cash' AND payment_date::date = days.d),0) AS cash,
-              (SELECT count(*) FROM payments WHERE status='completed' AND payment_date::date = days.d)::int AS transactions
+              COALESCE((SELECT sum(amount) FROM payments WHERE status='completed' AND payment_date::date = days.d ${clinicWhere(user)}),0) AS collected,
+              COALESCE((SELECT sum(amount) FROM refunds WHERE refunded_at::date = days.d ${clinicWhere(user)}),0) AS refunded,
+              COALESCE((SELECT sum(amount) FROM payments WHERE status='completed' AND method='Cash' AND payment_date::date = days.d ${clinicWhere(user)}),0) AS cash,
+              (SELECT count(*) FROM payments WHERE status='completed' AND payment_date::date = days.d ${clinicWhere(user)})::int AS transactions
        FROM days WHERE days.d <= CURRENT_DATE ORDER BY days.d DESC`,
       [start, end]
     ),
@@ -148,11 +153,11 @@ const REPORTS = {
   'monthly-collection': {
     title: 'Monthly collection',
     permission: 'reports.financial',
-    run: ({ start, end }) => query(
+    run: ({ start, end, user }) => query(
       `SELECT to_char(date_trunc('month', payment_date), 'Mon YYYY') AS month,
               sum(amount) AS collected,
               count(*)::int AS transactions
-       FROM payments WHERE status='completed' AND payment_date::date BETWEEN $1 AND $2
+       FROM payments WHERE status='completed' AND payment_date::date BETWEEN $1 AND $2 ${clinicWhere(user)}
        GROUP BY date_trunc('month', payment_date) ORDER BY date_trunc('month', payment_date) DESC`,
       [start, end]
     ),
@@ -165,9 +170,9 @@ const REPORTS = {
   'payment-methods': {
     title: 'Collection by payment method',
     permission: 'reports.financial',
-    run: ({ start, end }) => query(
+    run: ({ start, end, user }) => query(
       `SELECT method, sum(amount) AS collected, count(*)::int AS transactions
-       FROM payments WHERE status='completed' AND payment_date::date BETWEEN $1 AND $2
+       FROM payments WHERE status='completed' AND payment_date::date BETWEEN $1 AND $2 ${clinicWhere(user)}
        GROUP BY method ORDER BY collected DESC`,
       [start, end]
     ),
@@ -180,11 +185,11 @@ const REPORTS = {
   'outstanding-invoices': {
     title: 'Outstanding invoices',
     permission: 'reports.financial',
-    run: () => query(
+    run: ({ user }) => query(
       `SELECT i.invoice_no, i.invoice_date, p.patient_no, p.full_name AS patient, p.mobile,
               i.total, i.amount_paid, i.outstanding_balance, i.status
        FROM invoices i JOIN patients p ON p.id = i.patient_id
-       WHERE i.status IN ('issued','partially_paid') AND i.outstanding_balance > 0
+       WHERE i.status IN ('issued','partially_paid') AND i.outstanding_balance > 0 ${clinicWhere(user, 'i.clinic_id')}
        ORDER BY i.invoice_date ASC`
     ),
     columns: [

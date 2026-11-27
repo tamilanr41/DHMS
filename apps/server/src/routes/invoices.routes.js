@@ -253,15 +253,17 @@ router.get('/:id/adjustments', requirePermission('invoices.view'), asyncHandler(
      WHERE a.invoice_id = $1 ORDER BY a.created_at`,
     [id]
   );
-  res.json({ data: rows.map((r) => ({
-    id: r.id,
-    adjustmentNo: r.adjustment_no,
-    type: r.type,
-    amount: r.amount,
-    reason: r.reason,
-    createdByName: r.created_by_name,
-    createdAt: r.created_at
-  })) });
+  res.json({
+    data: rows.map((r) => ({
+      id: r.id,
+      adjustmentNo: r.adjustment_no,
+      type: r.type,
+      amount: r.amount,
+      reason: r.reason,
+      createdByName: r.created_by_name,
+      createdAt: r.created_at
+    }))
+  });
 }));
 
 router.post('/:id/adjustments', requirePermission('invoices.manage'), asyncHandler(async (req, res) => {

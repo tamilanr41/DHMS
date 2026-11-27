@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar.jsx';
 import Topbar from './Topbar.jsx';
 import SubscriptionWarningBanner from '../components/SubscriptionWarningBanner.jsx';
+import ZhaDentalAiBot from '../components/ai/ZhaDentalAiBot.jsx';
 
 const STORAGE_KEY = 'zhanx.sidebarCollapsed';
 
@@ -94,6 +95,9 @@ export default function AppLayout({ children }) {
           </div>
         </main>
       </div>
+
+      {/* Floating AI Dental Pet & Practice Guide Bot */}
+      <ZhaDentalAiBot />
     </div>
   );
 }

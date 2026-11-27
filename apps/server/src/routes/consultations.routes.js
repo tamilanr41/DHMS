@@ -46,6 +46,10 @@ const createSchema = z.object({
 router.get('/', requireAnyPermission('consultations.view', 'patients.view', 'queue.view'), asyncHandler(async (req, res) => {
   const where = ['1=1'];
   const params = [];
+  if (req.user?.clinicId) {
+    params.push(req.user.clinicId);
+    where.push(`(c.clinic_id = $${params.length} OR p.clinic_id = $${params.length})`);
+  }
   if (req.query.patientId) {
     params.push(req.query.patientId);
     where.push(`c.patient_id = $${params.length}`);
@@ -83,7 +87,10 @@ router.post('/', requirePermission('consultations.manage'), asyncHandler(async (
   const dentistId = req.user.role === 'dentist' ? req.user.id : body.dentistId;
   if (!dentistId) throw ApiError.badRequest('dentistId is required');
 
-  const patient = await query('SELECT 1 FROM patients WHERE id = $1', [body.patientId]);
+  const patient = await query(
+    `SELECT 1 FROM patients WHERE id = $1 ${req.user?.clinicId ? 'AND clinic_id = $2' : ''}`,
+    req.user?.clinicId ? [body.patientId, req.user.clinicId] : [body.patientId]
+  );
   if (!patient.rowCount) throw ApiError.notFound('Patient not found');
   const dentist = await query(
     `SELECT 1 FROM users u JOIN roles r ON r.id = u.role_id WHERE u.id = $1 AND r.code = 'dentist'`,
@@ -96,13 +103,14 @@ router.post('/', requirePermission('consultations.manage'), asyncHandler(async (
     const no = `CONS-${String(seq[0].n).padStart(6, '0')}`;
     const { rows } = await client.query(
       `INSERT INTO consultations (consultation_no, patient_id, appointment_id, dentist_id,
-         chief_complaint, examination_findings, diagnosis, clinical_notes, recommendations, follow_up_date, vitals)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+         chief_complaint, examination_findings, diagnosis, clinical_notes, recommendations, follow_up_date, vitals, clinic_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
       [
         no, body.patientId, body.appointmentId || null, dentistId,
         body.chiefComplaint || null, body.examinationFindings || null, body.diagnosis || null,
         body.clinicalNotes || null, body.recommendations || null, body.followUpDate || null,
-        JSON.stringify(body.vitals || {})
+        JSON.stringify(body.vitals || {}),
+        req.user?.clinicId || null
       ]
     );
     if (body.appointmentId) {
@@ -119,7 +127,7 @@ router.post('/', requirePermission('consultations.manage'), asyncHandler(async (
     return rows[0];
   });
 
-  await logAudit(null, req, { action: 'consultation.created', entityType: 'consultation', entityId: consultation.id, details: { patientId: body.patientId } });
+  await logAudit(null, req, { action: 'consultation.created', entityType: 'consultation', entityId: consultation.id, details: { patientId: body.patientId, clinicId: req.user?.clinicId } });
   res.status(201).json({ data: mapConsultation(consultation) });
 }));
 
@@ -135,8 +143,8 @@ router.get('/:id', requirePermission('consultations.view'), asyncHandler(async (
      JOIN patients p ON p.id = c.patient_id
      JOIN users u ON u.id = c.dentist_id
      LEFT JOIN appointments a ON a.id = c.appointment_id
-     WHERE c.id = $1`,
-    [id]
+     WHERE c.id = $1 ${req.user?.clinicId ? 'AND (c.clinic_id = $2 OR p.clinic_id = $2)' : ''}`,
+    req.user?.clinicId ? [id, req.user.clinicId] : [id]
   );
   if (!rows[0]) throw ApiError.notFound('Consultation not found');
   const c = rows[0];

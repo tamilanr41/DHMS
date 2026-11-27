@@ -27,6 +27,10 @@ const paymentSchema = z.object({
 router.get('/', requirePermission('payments.view'), asyncHandler(async (req, res) => {
   const where = ['1=1'];
   const params = [];
+  if (req.user?.clinicId) {
+    params.push(req.user.clinicId);
+    where.push(`(p.clinic_id = $${params.length} OR i.clinic_id = $${params.length} OR pt.clinic_id = $${params.length})`);
+  }
   if (req.query.patientId) {
     params.push(req.query.patientId);
     where.push(`p.patient_id = $${params.length}`);
@@ -76,7 +80,10 @@ router.post('/', requirePermission('payments.manage'), asyncHandler(async (req, 
   }
 
   const payment = await withTransaction(async (client) => {
-    const { rows: invRows } = await client.query('SELECT * FROM invoices WHERE id = $1 FOR UPDATE', [body.invoiceId]);
+    const { rows: invRows } = await client.query(
+      `SELECT * FROM invoices WHERE id = $1 ${req.user?.clinicId ? 'AND clinic_id = $2' : ''} FOR UPDATE`,
+      req.user?.clinicId ? [body.invoiceId, req.user.clinicId] : [body.invoiceId]
+    );
     const invoice = invRows[0];
     if (!invoice) throw ApiError.notFound('Invoice not found');
     if (invoice.status === 'draft') throw ApiError.conflict('Finalize the invoice before collecting payment');
@@ -93,9 +100,9 @@ router.post('/', requirePermission('payments.manage'), asyncHandler(async (req, 
     const paymentNo = `PAY-${String(seq[0].n).padStart(6, '0')}`;
     const { rows } = await client.query(
       `INSERT INTO payments (payment_no, invoice_id, patient_id, amount, method, transaction_ref,
-         payment_date, recorded_by, notes, idempotency_key)
-       VALUES ($1,$2,$3,$4,$5,$6,COALESCE($7::timestamptz, now()),$8,$9,$10) RETURNING *`,
-      [paymentNo, invoice.id, invoice.patient_id, fromPaise(amount), body.method, body.transactionRef || null, body.paymentDate || null, req.user.id, body.notes || null, body.idempotencyKey]
+         payment_date, recorded_by, notes, idempotency_key, clinic_id)
+       VALUES ($1,$2,$3,$4,$5,$6,COALESCE($7::timestamptz, now()),$8,$9,$10,$11) RETURNING *`,
+      [paymentNo, invoice.id, invoice.patient_id, fromPaise(amount), body.method, body.transactionRef || null, body.paymentDate || null, req.user.id, body.notes || null, body.idempotencyKey, req.user?.clinicId || null]
     );
     await recalcInvoice(client, invoice.id);
     return rows[0];
@@ -105,7 +112,7 @@ router.post('/', requirePermission('payments.manage'), asyncHandler(async (req, 
     action: 'payment.collected',
     entityType: 'payment',
     entityId: payment.id,
-    details: { paymentNo: payment.payment_no, invoiceId: body.invoiceId, amount: payment.amount, method: payment.method }
+    details: { paymentNo: payment.payment_no, invoiceId: body.invoiceId, amount: payment.amount, method: payment.method, clinicId: req.user?.clinicId }
   });
   res.status(201).json({ data: mapPayment(payment) });
 }));
@@ -121,12 +128,12 @@ router.get('/:id/receipt.pdf', requirePermission('payments.view'), asyncHandler(
     `SELECT p.*, i.invoice_no, pt.full_name AS patient_name, pt.patient_no, pt.mobile,
             u.full_name AS recorded_by_name
      FROM payments p JOIN invoices i ON i.id = p.invoice_id JOIN patients pt ON pt.id = p.patient_id
-     LEFT JOIN users u ON u.id = p.recorded_by WHERE p.id = $1`,
-    [id]
+     LEFT JOIN users u ON u.id = p.recorded_by WHERE p.id = $1 ${req.user?.clinicId ? 'AND (p.clinic_id = $2 OR i.clinic_id = $2)' : ''}`,
+    req.user?.clinicId ? [id, req.user.clinicId] : [id]
   );
   if (!rows[0]) throw ApiError.notFound('Payment not found');
   await streamPaymentReceipt({ payment: mapPayment(rows[0]), clinic: await getClinic() }, res);
-  await logAudit(null, req, { action: 'payment.receipt_printed', entityType: 'payment', entityId: id });
+  await logAudit(null, req, { action: 'payment.receipt_printed', entityType: 'payment', entityId: id, details: { clinicId: req.user?.clinicId } });
 }));
 
 router.post('/:id/void', requirePermission('refunds.manage'), asyncHandler(async (req, res) => {
@@ -134,7 +141,10 @@ router.post('/:id/void', requirePermission('refunds.manage'), asyncHandler(async
   const { reason } = validate(z.object({ reason: z.string().trim().min(3, 'Reason is required').max(500) }), req.body);
 
   const payment = await withTransaction(async (client) => {
-    const { rows } = await client.query('SELECT * FROM payments WHERE id = $1 FOR UPDATE', [id]);
+    const { rows } = await client.query(
+      `SELECT * FROM payments WHERE id = $1 ${req.user?.clinicId ? 'AND clinic_id = $2' : ''} FOR UPDATE`,
+      req.user?.clinicId ? [id, req.user.clinicId] : [id]
+    );
     const p = rows[0];
     if (!p) throw ApiError.notFound('Payment not found');
     if (p.status === 'void') throw ApiError.conflict('Payment is already void');

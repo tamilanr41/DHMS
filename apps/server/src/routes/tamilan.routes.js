@@ -686,34 +686,63 @@ router.get('/database-health', async (req, res, next) => {
   }
 });
 
-// 17. Single Clinic Live Activity Feed & Staff Pulse
+// 17. Multi-Clinic Live Activity Feed & Staff Pulse
 router.get('/live-activity', async (req, res, next) => {
   try {
     const today = new Date().toISOString().slice(0, 10);
+    const { clinicId } = req.query;
 
-    const [auditRes, staffRes, todayOps, todayFinance, workstations] = await Promise.all([
-      // 1. Recent Audit Logs (Staff actions: billing, consults, edits)
+    const whereClauses = [];
+    const params = [];
+    if (clinicId && clinicId !== 'all') {
+      params.push(clinicId);
+      whereClauses.push(`(u.clinic_id = $${params.length} OR c.id = $${params.length} OR a.details->>'clinic_id' = $${params.length})`);
+    }
+    const whereSql = whereClauses.length ? `WHERE ${whereClauses.join(' AND ')}` : '';
+
+    const staffWhere = clinicId && clinicId !== 'all' ? `WHERE u.clinic_id = $1` : '';
+    const staffParams = clinicId && clinicId !== 'all' ? [clinicId] : [];
+
+    const opsWhere = clinicId && clinicId !== 'all' ? `AND clinic_id = $2` : '';
+    const opsParams = clinicId && clinicId !== 'all' ? [today, clinicId] : [today];
+
+    const finWhere = clinicId && clinicId !== 'all' ? `AND clinic_id = $2` : '';
+    const finParams = clinicId && clinicId !== 'all' ? [today, clinicId] : [today];
+
+    const [auditRes, staffRes, todayOps, todayFinance, workstations, clinicsRes] = await Promise.all([
+      // 1. Recent Audit Logs (Staff actions: billing, consults, edits) with clinic details
       query(`
-        SELECT a.id, a.action, a.username, a.entity_type, a.entity_id, a.details, a.ip, a.created_at
+        SELECT a.id, a.action, a.username, a.entity_type, a.entity_id, a.details, a.ip, a.created_at,
+               u.full_name AS staff_name, r.name AS staff_role, r.code AS staff_role_code,
+               c.id AS clinic_id, c.clinic_name, c.clinic_code
         FROM audit_logs a
+        LEFT JOIN users u ON u.id = a.user_id
+        LEFT JOIN roles r ON r.id = u.role_id
+        LEFT JOIN clinic_tenants c ON c.id = u.clinic_id
+        ${whereSql}
         ORDER BY a.created_at DESC
-        LIMIT 50
-      `),
+        LIMIT 100
+      `, params),
       // 2. Staff Roster & Status
       query(`
-        SELECT u.id, u.username, u.full_name, u.is_active, u.last_login_at, r.name AS role_name, r.code AS role_code
+        SELECT u.id, u.username, u.full_name, u.is_active, u.last_login_at,
+               r.name AS role_name, r.code AS role_code,
+               c.id AS clinic_id, c.clinic_name, c.clinic_code
         FROM users u
         LEFT JOIN roles r ON r.id = u.role_id
-        ORDER BY u.created_at ASC
-      `),
+        LEFT JOIN clinic_tenants c ON c.id = u.clinic_id
+        ${staffWhere}
+        ORDER BY u.last_login_at DESC NULLS LAST, u.created_at ASC
+        LIMIT 60
+      `, staffParams),
       // 3. Today's Clinical Counts
       query(`
         SELECT
-          (SELECT count(*)::int FROM appointments WHERE appointment_date = $1) AS today_appointments,
-          (SELECT count(*)::int FROM patients WHERE created_at::date = $1::date) AS today_new_patients,
-          (SELECT count(*)::int FROM prescriptions WHERE created_at::date = $1::date) AS today_prescriptions,
-          (SELECT count(*)::int FROM invoices WHERE invoice_date = $1) AS today_invoices
-      `, [today]),
+          (SELECT count(*)::int FROM appointments WHERE appointment_date = $1 ${opsWhere}) AS today_appointments,
+          (SELECT count(*)::int FROM patients WHERE created_at::date = $1::date ${opsWhere}) AS today_new_patients,
+          (SELECT count(*)::int FROM prescriptions WHERE created_at::date = $1::date ${opsWhere}) AS today_prescriptions,
+          (SELECT count(*)::int FROM invoices WHERE invoice_date = $1 ${opsWhere}) AS today_invoices
+      `, opsParams),
       // 4. Today's Financial Collection (Cash vs UPI vs Card)
       query(`
         SELECT 
@@ -722,14 +751,20 @@ router.get('/live-activity', async (req, res, next) => {
           COALESCE(SUM(CASE WHEN method ILIKE '%UPI%' THEN amount ELSE 0 END), 0) AS upi_collected,
           COALESCE(SUM(CASE WHEN method ILIKE '%Card%' THEN amount ELSE 0 END), 0) AS card_collected
         FROM payments
-        WHERE payment_date::date = $1::date
-      `, [today]),
+        WHERE payment_date::date = $1::date ${finWhere}
+      `, finParams),
       // 5. Workstations / Connected PCs
       query(`
         SELECT d.id, d.device_fingerprint, d.device_name, d.os_platform, d.last_seen_at, d.is_authorized
         FROM clinic_devices d
         ORDER BY d.last_seen_at DESC
         LIMIT 10
+      `),
+      // 6. Clinic Tenants for Filter Dropdown
+      query(`
+        SELECT id, clinic_name, clinic_code, status
+        FROM clinic_tenants
+        ORDER BY clinic_name ASC
       `)
     ]);
 
@@ -740,7 +775,8 @@ router.get('/live-activity', async (req, res, next) => {
         staff: staffRes.rows || [],
         todayOps: todayOps.rows[0] || {},
         todayFinance: todayFinance.rows[0] || {},
-        workstations: workstations.rows || []
+        workstations: workstations.rows || [],
+        clinics: clinicsRes.rows || []
       }
     });
   } catch (err) {

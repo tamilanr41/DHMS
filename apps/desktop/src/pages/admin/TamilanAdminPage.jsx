@@ -99,13 +99,16 @@ export default function TamilanAdminPage() {
   const [extensionDays, setExtensionDays] = useState('30');
   const [seatLimitInput, setSeatLimitInput] = useState('1');
   const [isFixing, setIsFixing] = useState(false);
+  const [liveClinicFilter, setLiveClinicFilter] = useState('all');
 
   // Queries
   const liveActivityQuery = useQuery({
-    queryKey: ['tamilan-live-activity'],
+    queryKey: ['tamilan-live-activity', liveClinicFilter],
     queryFn: async () => {
-      const res = await api.get('/tamilan/live-activity');
-      return res?.data ?? res ?? { recentActivity: [], staff: [], todayOps: {}, todayFinance: {}, workstations: [] };
+      const res = await api.get('/tamilan/live-activity', {
+        params: { clinicId: liveClinicFilter }
+      });
+      return res?.data ?? res ?? { recentActivity: [], staff: [], todayOps: {}, todayFinance: {}, workstations: [], clinics: [] };
     },
     enabled: isAuthenticated,
     refetchInterval: 8_000
@@ -890,21 +893,37 @@ If you or your staff have any questions regarding patient charts, prescriptions,
                   <div>
                     <h3 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2">
                       <Activity size={16} className="text-[#0a7f8b] animate-pulse" />
-                      Live Staff Activity Stream ("Who Did What?")
+                      Live Staff Activity Stream ("Who Did What in Which Clinic?")
                     </h3>
                     <p className="text-xs text-slate-400">
-                      Real-time chronological ledger of all clinical, reception, and financial actions.
+                      Real-time chronological telemetry across all active dental clinics in India.
                     </p>
                   </div>
-                  <div className="relative min-w-[200px]">
-                    <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                    <input
-                      type="text"
-                      value={activitySearch}
-                      onChange={(e) => setActivitySearch(e.target.value)}
-                      placeholder="Filter staff or action..."
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50 pl-8 pr-3 py-1.5 text-xs font-semibold focus:border-[#0a7f8b] focus:outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white"
-                    />
+                  <div className="flex flex-wrap items-center gap-2">
+                    {/* Clinic Filter Dropdown */}
+                    <select
+                      value={liveClinicFilter}
+                      onChange={(e) => setLiveClinicFilter(e.target.value)}
+                      className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 shadow-2xs focus:border-[#0a7f8b] focus:outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-slate-200"
+                    >
+                      <option value="all">🏢 All Clinics ({liveActivityQuery.data?.clinics?.length || 0})</option>
+                      {(liveActivityQuery.data?.clinics || []).map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.clinic_name} ({c.clinic_code})
+                        </option>
+                      ))}
+                    </select>
+
+                    <div className="relative min-w-[180px]">
+                      <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input
+                        type="text"
+                        value={activitySearch}
+                        onChange={(e) => setActivitySearch(e.target.value)}
+                        placeholder="Filter staff or action..."
+                        className="w-full rounded-xl border border-slate-200 bg-slate-50 pl-8 pr-3 py-1.5 text-xs font-semibold focus:border-[#0a7f8b] focus:outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white"
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -916,7 +935,9 @@ If you or your staff have any questions regarding patient charts, prescriptions,
                       const q = activitySearch.toLowerCase();
                       return (
                         (a.username || '').toLowerCase().includes(q) ||
+                        (a.staff_name || '').toLowerCase().includes(q) ||
                         (a.action || '').toLowerCase().includes(q) ||
+                        (a.clinic_name || '').toLowerCase().includes(q) ||
                         (a.entity_type || '').toLowerCase().includes(q)
                       );
                     })
@@ -939,15 +960,36 @@ If you or your staff have any questions regarding patient charts, prescriptions,
                             }`}>
                               {act.username?.slice(0, 2).toUpperCase() || 'ST'}
                             </div>
-                            <div className="space-y-0.5">
-                              <p className="text-xs font-bold text-slate-900 dark:text-white">
-                                <span className="font-black text-slate-800 dark:text-slate-100">@{act.username || 'system'}</span>{' '}
+                            <div className="space-y-1">
+                              {/* Clinic Badge & Staff Identity */}
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                {act.clinic_name ? (
+                                  <span className="inline-flex items-center gap-1 rounded-md bg-teal-50 px-2 py-0.5 text-[10px] font-bold text-[#0a7f8b] border border-teal-200/60 dark:bg-teal-950/40 dark:text-teal-300 dark:border-teal-800/40">
+                                    🏥 {act.clinic_name} ({act.clinic_code})
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500 dark:bg-slate-800">
+                                    🏢 System / Master
+                                  </span>
+                                )}
+
+                                <span className="font-black text-slate-800 dark:text-slate-100 text-xs">
+                                  {act.staff_name ? `${act.staff_name} (@${act.username || 'staff'})` : `@${act.username || 'system'}`}
+                                </span>
+
+                                {act.staff_role && (
+                                  <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[9.5px] font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                                    {act.staff_role}
+                                  </span>
+                                )}
+
                                 <span className={`inline-block rounded-md px-1.5 py-0.5 text-[10px] font-black uppercase ${
                                   isDanger ? 'bg-rose-100 text-rose-800' : isSuccess ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'
                                 }`}>
                                   {act.action}
                                 </span>
-                              </p>
+                              </div>
+
                               <p className="text-[11px] text-slate-500 font-mono">
                                 Target: {act.entity_type} {act.entity_id ? `(#${String(act.entity_id).slice(0, 8)})` : ''}
                               </p>
@@ -1009,6 +1051,11 @@ If you or your staff have any questions regarding patient charts, prescriptions,
                           <p className="text-[10.5px] text-slate-400">
                             @{u.username} · <span className="font-semibold text-[#0a7f8b]">{u.role_name || u.role_code}</span>
                           </p>
+                          {u.clinic_name && (
+                            <p className="text-[10px] text-teal-600 dark:text-teal-400 font-semibold">
+                              🏥 {u.clinic_name} ({u.clinic_code})
+                            </p>
+                          )}
                         </div>
                         <span className="rounded-md bg-white px-2 py-0.5 text-[10px] font-mono text-slate-400 border border-slate-200/60 dark:bg-slate-700">
                           {u.last_login_at ? formatDate(u.last_login_at) : 'Active'}

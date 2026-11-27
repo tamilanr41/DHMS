@@ -36,7 +36,6 @@ export default function TamilanAdminPage() {
 
   // Master Authentication Protection
   const [authPin, setAuthPin] = useState(() => localStorage.getItem('tamilan_pin_session') || '');
-  const [usernameInput, setUsernameInput] = useState('tamilan');
   const [pinInput, setPinInput] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [pinError, setPinError] = useState(false);
@@ -611,22 +610,6 @@ If you or your staff have any questions regarding patient charts, prescriptions,
             <form onSubmit={handlePinSubmit} className="mt-6 space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                  Platform Username
-                </label>
-                <div className="relative">
-                  <User size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input
-                    type="text"
-                    value={usernameInput}
-                    onChange={(e) => setUsernameInput(e.target.value)}
-                    placeholder="Enter platform username"
-                    className="w-full rounded-xl border border-slate-700 bg-slate-800/80 pl-10 pr-4 py-2.5 text-sm font-semibold text-white placeholder-slate-500 focus:border-[#009da6] focus:outline-none focus:ring-2 focus:ring-[#009da6]/20 transition"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
                   Master Security Key
                 </label>
                 <div className="relative">
@@ -634,12 +617,13 @@ If you or your staff have any questions regarding patient charts, prescriptions,
                   <input
                     type={showPassword ? 'text' : 'password'}
                     value={pinInput}
+                    autoFocus
                     onChange={(e) => {
                       setPinInput(e.target.value);
                       if (pinError) setPinError(false);
                     }}
                     placeholder="Enter master authorization key"
-                    className="w-full rounded-xl border border-slate-700 bg-slate-800/80 pl-10 pr-11 py-2.5 text-sm font-semibold text-white placeholder-slate-500 focus:border-[#009da6] focus:outline-none focus:ring-2 focus:ring-[#009da6]/20 transition"
+                    className="w-full rounded-xl border border-slate-700 bg-slate-800/80 pl-10 pr-11 py-3 text-sm font-semibold text-white placeholder-slate-500 focus:border-[#009da6] focus:outline-none focus:ring-2 focus:ring-[#009da6]/20 transition"
                   />
                   <button
                     type="button"

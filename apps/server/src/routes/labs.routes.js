@@ -128,8 +128,6 @@ router.post('/orders', requirePermission('labs.manage'), asyncHandler(async (req
     );
     return rows[0];
   });
-    return rows[0];
-  });
   await logAudit(null, req, { action: 'lab.order_created', entityType: 'dental_lab_order', entityId: order.id, details: { orderNo: order.order_no, patientId: body.patientId } });
   res.status(201).json({ data: mapOrder(order) });
 }));

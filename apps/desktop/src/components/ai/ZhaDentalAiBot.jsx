@@ -26,111 +26,140 @@ import {
   Volume2,
   VolumeX,
   MessageSquare,
-  Smile
+  Smile,
+  SquarePen
 } from 'lucide-react';
 import { useAuth } from '../../services/auth.jsx';
 
-// ── Robot Mascot SVG Component ───────────────────────────────────────────────
-function DentalRobotAvatar({ isListening = false, isSpeaking = false, size = 48, className = '' }) {
+// ── Robot Mascot SVG Component (Matching Reference Image) ────────────────────
+function TerminalCloudRobotAvatar({ isListening = false, isSpeaking = false, size = 64, className = '' }) {
   return (
     <div
       className={`relative inline-flex items-center justify-center select-none transition-transform duration-300 ${className}`}
       style={{ width: size, height: size }}
     >
       <svg
-        viewBox="0 0 100 100"
+        viewBox="0 0 100 116"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
-        className="w-full h-full drop-shadow-md"
+        className="w-full h-full drop-shadow-lg overflow-visible"
       >
         <defs>
-          <linearGradient id="robotBody" x1="10" y1="20" x2="90" y2="90" gradientUnits="userSpaceOnUse">
-            <stop stopColor="#00c0cb" />
-            <stop offset="0.5" stopColor="#0a7f8b" />
-            <stop offset="1" stopColor="#064349" />
+          {/* Cloud Blue Gradient */}
+          <linearGradient id="cloudGrad" x1="20" y1="10" x2="80" y2="105" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#6ea8fe" />
+            <stop offset="0.5" stopColor="#4f86f7" />
+            <stop offset="1" stopColor="#3768db" />
           </linearGradient>
-          <linearGradient id="robotEar" x1="0" y1="0" x2="1" y2="1">
-            <stop stopColor="#38e1ea" />
-            <stop offset="1" stopColor="#02535a" />
+
+          {/* Dark Visor Gradient */}
+          <linearGradient id="screenVisorGrad" x1="30" y1="20" x2="70" y2="60" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#14182b" />
+            <stop offset="1" stopColor="#0a0d18" />
           </linearGradient>
-          <linearGradient id="toothGrad" x1="0" y1="0" x2="1" y2="1">
-            <stop stopColor="#ffffff" />
-            <stop offset="0.6" stopColor="#e2f7f9" />
-            <stop offset="1" stopColor="#b6e7eb" />
-          </linearGradient>
-          <filter id="glowFilter" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="3" result="blur" />
+
+          {/* Glowing Cyan LED Filter */}
+          <filter id="cyanGlow" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="1.5" result="blur" />
             <feComposite in="SourceGraphic" in2="blur" operator="over" />
           </filter>
         </defs>
 
-        {/* Head Antenna */}
-        <line x1="50" y1="24" x2="50" y2="10" stroke="#009da6" strokeWidth="4" strokeLinecap="round" />
-        <circle
-          cx="50"
-          cy="8"
-          r="6"
-          fill={isListening ? '#ef4444' : '#22d3ee'}
-          filter="url(#glowFilter)"
-          className={isListening ? 'animate-ping' : ''}
-        />
-        <circle cx="50" cy="8" r="4" fill="#ffffff" />
+        {/* ── Feet ── */}
+        <rect x="33" y="90" width="13" height="17" rx="6.5" fill="#3260cc" stroke="#1d3f94" strokeWidth="2.5" />
+        <rect x="54" y="90" width="13" height="17" rx="6.5" fill="#3260cc" stroke="#1d3f94" strokeWidth="2.5" />
 
-        {/* Head Chassis */}
-        <rect x="18" y="24" width="64" height="52" rx="22" fill="url(#robotBody)" stroke="#ffffff" strokeWidth="2.5" />
-
-        {/* Ears */}
-        <rect x="12" y="42" width="7" height="16" rx="3.5" fill="url(#robotEar)" stroke="#ffffff" strokeWidth="1.5" />
-        <rect x="81" y="42" width="7" height="16" rx="3.5" fill="url(#robotEar)" stroke="#ffffff" strokeWidth="1.5" />
-
-        {/* Digital Screen / Visor */}
-        <rect x="25" y="32" width="50" height="34" rx="14" fill="#0b1728" stroke="#164e63" strokeWidth="2" />
-
-        {/* Eyes (Expressive Blue/Cyan LED) */}
-        {isListening ? (
-          // Listening pulse wave
-          <g fill="#22d3ee">
-            <circle cx="38" cy="46" r="4" className="animate-bounce" />
-            <circle cx="50" cy="46" r="4" className="animate-bounce delay-75" />
-            <circle cx="62" cy="46" r="4" className="animate-bounce delay-150" />
-          </g>
-        ) : (
-          // Friendly smiling eyes (^ ^)
-          <g stroke="#22d3ee" strokeWidth="3" strokeLinecap="round">
-            <path d="M34 49 C 36 43, 44 43, 46 49" />
-            <path d="M54 49 C 56 43, 64 43, 66 49" />
-          </g>
-        )}
-
-        {/* Cheerful Smile Mouth */}
-        <path
-          d="M44 57 Q 50 62 56 57"
-          stroke={isSpeaking ? '#38bdf8' : '#22d3ee'}
+        {/* ── Arms ── */}
+        <ellipse
+          cx="21"
+          cy="74"
+          rx="6.5"
+          ry="13"
+          transform="rotate(-18 21 74)"
+          fill="#3768db"
+          stroke="#1d3f94"
           strokeWidth="2.5"
-          strokeLinecap="round"
-          fill="none"
+        />
+        <ellipse
+          cx="79"
+          cy="74"
+          rx="6.5"
+          ry="13"
+          transform="rotate(18 79 74)"
+          fill="#3768db"
+          stroke="#1d3f94"
+          strokeWidth="2.5"
         />
 
-        {/* Mascot Robot Hands holding a Sparkling Pearl Tooth */}
-        <g transform="translate(37, 65)">
-          {/* Pearl Tooth Mascot */}
-          <path
-            d="M5 2 C 7 -2, 19 -2, 21 2 C 24 6, 25 15, 23 23 C 21 29, 17 29, 15 22 C 14 18, 12 18, 11 22 C 9 29, 5 29, 3 23 C 1 15, 2 6, 5 2 Z"
-            fill="url(#toothGrad)"
-            stroke="#0a7f8b"
-            strokeWidth="1.2"
-          />
-          {/* Sparkle Reflection on Tooth */}
-          <circle cx="9" cy="6" r="1.5" fill="#ffffff" />
-          <path d="M19 8 L 22 8 M 20.5 6.5 L 20.5 9.5" stroke="#38bdf8" strokeWidth="1" strokeLinecap="round" />
+        {/* ── Chubby Torso / Belly ── */}
+        <ellipse
+          cx="50"
+          cy="75"
+          rx="25"
+          ry="22"
+          fill="url(#cloudGrad)"
+          stroke="#1d3f94"
+          strokeWidth="3"
+        />
+
+        {/* Belly Prompt Logo "> _" in Crisp White */}
+        <g stroke="#ffffff" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M 42 71.5 L 47 75 L 42 78.5" strokeWidth="2.4" fill="none" />
+          <line x1="51" y1="78.5" x2="58" y2="78.5" strokeWidth="2.4" />
         </g>
 
-        {/* Robot Hands Clamping Tooth */}
-        <circle cx="34" cy="74" r="5" fill="#02535a" stroke="#ffffff" strokeWidth="1.5" />
-        <circle cx="66" cy="74" r="5" fill="#02535a" stroke="#ffffff" strokeWidth="1.5" />
+        {/* ── Fluffy Cloud Head Lobes ── */}
+        <g stroke="#1d3f94" strokeWidth="3" strokeLinejoin="round">
+          <circle cx="50" cy="22" r="16" fill="url(#cloudGrad)" />
+          <circle cx="33" cy="29" r="14" fill="url(#cloudGrad)" />
+          <circle cx="67" cy="29" r="14" fill="url(#cloudGrad)" />
+          <circle cx="23" cy="44" r="13" fill="url(#cloudGrad)" />
+          <circle cx="77" cy="44" r="13" fill="url(#cloudGrad)" />
+          <circle cx="34" cy="54" r="12" fill="url(#cloudGrad)" />
+          <circle cx="66" cy="54" r="12" fill="url(#cloudGrad)" />
+          {/* Inner core to seamlessly blend lobes */}
+          <rect x="28" y="24" width="44" height="34" rx="10" fill="url(#cloudGrad)" stroke="none" />
+        </g>
+
+        {/* ── Dark Digital Visor Screen ── */}
+        <rect
+          x="27"
+          y="25"
+          width="46"
+          height="32"
+          rx="9"
+          fill="url(#screenVisorGrad)"
+          stroke="#1e2642"
+          strokeWidth="2"
+        />
+
+        {/* ── Visor Face Expression: Terminal Eyes "> _" ── */}
+        {isListening ? (
+          // Listening pulse wave
+          <g fill="#38e1ea" filter="url(#cyanGlow)">
+            <circle cx="39" cy="41" r="3" className="animate-ping" />
+            <circle cx="50" cy="41" r="3.5" />
+            <circle cx="61" cy="41" r="3" className="animate-ping" />
+          </g>
+        ) : isSpeaking ? (
+          // Speaking cheerful terminal animation
+          <g stroke="#38e1ea" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" filter="url(#cyanGlow)">
+            <path d="M 37 37 L 43 41 L 37 45" fill="none" />
+            <path d="M 53 41 Q 57 36 61 41" fill="none" />
+            <path d="M 46 48 Q 50 51 54 48" stroke="#38e1ea" strokeWidth="2" fill="none" />
+          </g>
+        ) : (
+          // Standard Terminal Visor: Left eye ">", Right eye blinking "_"
+          <g stroke="#38e1ea" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" filter="url(#cyanGlow)">
+            {/* Left Eye: Terminal Prompt ">" */}
+            <path d="M 37 36 L 44 41 L 37 46" fill="none" />
+            {/* Right Eye: Cursor Underscore "_" */}
+            <line x1="52" y1="45" x2="63" y2="45" className="animate-pulse" />
+          </g>
+        )}
       </svg>
 
-      {/* Speaking Soundwaves */}
+      {/* Speaking Soundwaves Indicator */}
       {isSpeaking && (
         <span className="absolute -top-1 -right-1 flex h-4 w-4">
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
@@ -571,24 +600,32 @@ Would you like a step-by-step walkthrough or clinical dosage reference?`;
         </div>
       )}
 
-      {/* ── Main Bot Modal (Properly constrained within viewport) ── */}
+      {/* ── Main Bot Modal (Properly elevated above dock, never submerged) ── */}
       {isOpen && (
-        <div className="fixed bottom-22 right-4 sm:right-6 z-50 flex h-[min(560px,calc(100vh-110px))] w-[min(410px,calc(100vw-32px))] flex-col rounded-3xl border border-teal-200/90 bg-white shadow-2xl backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+        <div
+          className="fixed right-4 sm:right-6 z-50 flex flex-col rounded-3xl border border-blue-200/90 bg-white shadow-2xl backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900 overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+          style={{
+            bottom: '120px',
+            width: 'min(420px, calc(100vw - 32px))',
+            height: 'min(580px, calc(100vh - 140px))',
+            maxHeight: 'calc(100vh - 140px)'
+          }}
+        >
           {/* Header Bar */}
-          <div className="relative flex items-center justify-between bg-gradient-to-r from-[#009da6] via-[#0a7f8b] to-[#04616b] px-4 py-3 text-white shadow-md shrink-0">
+          <div className="relative flex items-center justify-between bg-gradient-to-r from-[#1d3f94] via-[#2951bd] to-[#1e2d63] px-4 py-3 text-white shadow-md shrink-0">
             <div className="flex items-center gap-2.5">
-              <div className="relative flex h-10 w-10 items-center justify-center rounded-2xl bg-white/20 shadow-inner backdrop-blur-md">
-                <DentalRobotAvatar isListening={isListening} isSpeaking={isSpeaking} size={36} />
-                <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-[#009da6] bg-emerald-400" />
+              <div className="relative flex h-10 w-10 items-center justify-center rounded-2xl bg-white/15 shadow-inner backdrop-blur-md">
+                <TerminalCloudRobotAvatar isListening={isListening} isSpeaking={isSpeaking} size={36} />
+                <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-[#1d3f94] bg-emerald-400" />
               </div>
               <div>
                 <div className="flex items-center gap-1.5">
                   <h3 className="text-sm font-black tracking-wide">Dr. Zha</h3>
-                  <span className="rounded-md bg-white/25 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider">
-                    Robotic AI Companion
+                  <span className="rounded-md bg-white/20 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-cyan-200">
+                    Robotic Dental Companion
                   </span>
                 </div>
-                <p className="text-[10.5px] text-teal-100 font-medium">Smart Clinical &amp; Voice Guide</p>
+                <p className="text-[10.5px] text-blue-200 font-medium">Smart Clinical &amp; Voice Guide</p>
               </div>
             </div>
 
@@ -728,7 +765,7 @@ Would you like a step-by-step walkthrough or clinical dosage reference?`;
 
                 {isTyping && (
                   <div className="flex items-center gap-2 text-xs text-slate-400 p-2">
-                    <DentalRobotAvatar isSpeaking={true} size={20} />
+                    <TerminalCloudRobotAvatar isSpeaking={true} size={22} />
                     <span className="font-semibold text-teal-600 dark:text-teal-300">
                       Dr. Zha is thinking…
                     </span>
@@ -1004,24 +1041,97 @@ Would you like a step-by-step walkthrough or clinical dosage reference?`;
         </div>
       )}
 
-      {/* ── Floating Robot Pet Dock Button ── */}
-      <button
-        type="button"
-        onClick={() => setIsOpen((prev) => !prev)}
-        aria-label="Dr. Zha Dental Robot AI Assistant"
-        className="group relative flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-tr from-[#009da6] via-[#0a7f8b] to-[#044c54] shadow-2xl shadow-teal-500/35 hover:scale-110 active:scale-95 transition-all duration-300 cursor-pointer border-2 border-white/70 dark:border-slate-700"
-      >
-        {/* Subtle breathing ambient aura */}
-        <span className="absolute -inset-1 rounded-3xl bg-cyan-400/20 blur-md group-hover:bg-cyan-400/35 transition duration-500" />
+      {/* ── Interactive Robot Mascot & Pill Dock (Matching Reference Image) ── */}
+      <div className="relative flex flex-col items-center">
+        {/* Floating Robot Mascot Pet */}
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => setIsOpen((prev) => !prev)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') setIsOpen((prev) => !prev);
+          }}
+          aria-label="Dr. Zha Robot AI Companion"
+          className="group relative -mb-1 flex cursor-pointer items-center justify-center transition-all duration-300 hover:scale-110 active:scale-95"
+        >
+          {/* Subtle Cyber Glow Aura behind robot */}
+          <span className="absolute -inset-2 rounded-full bg-blue-500/20 blur-lg group-hover:bg-blue-400/35 transition duration-500" />
 
-        {/* Robot Mascot SVG */}
-        <DentalRobotAvatar isListening={isListening} isSpeaking={isSpeaking} size={50} />
+          {/* Cute Cloud Robot Pet Avatar */}
+          <TerminalCloudRobotAvatar isListening={isListening} isSpeaking={isSpeaking} size={68} />
 
-        {/* "AI" Pill Badge */}
-        <span className="absolute -top-1.5 -right-1.5 flex h-5 px-1.5 items-center justify-center rounded-full bg-gradient-to-r from-rose-500 to-pink-500 text-[9.5px] font-black text-white shadow-md border border-white/80">
-          AI
-        </span>
-      </button>
+          {/* Sparkle Tooth Accent on shoulder */}
+          <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-cyan-400 to-blue-600 shadow-md border border-white text-[10px]">
+            🦷
+          </span>
+        </div>
+
+        {/* ── Sleek Dark Pill Dock & Action Button ── */}
+        <div className="flex items-center gap-2 pt-1">
+          {/* Dark Pill Dock Capsule */}
+          <div className="flex items-center gap-3 rounded-full bg-[#161822]/95 px-3.5 py-2 border border-slate-700/80 shadow-2xl backdrop-blur-md">
+            {/* Edit / Quick Query Button */}
+            <button
+              type="button"
+              onClick={() => setIsOpen((prev) => !prev)}
+              title="Open Clinical AI Assistant"
+              className="text-slate-300 hover:text-white hover:scale-110 transition-all duration-200 cursor-pointer p-0.5"
+            >
+              <SquarePen size={18} strokeWidth={2.2} />
+            </button>
+
+            {/* Subtle Divider */}
+            <div className="h-4 w-[1px] bg-slate-700/80" />
+
+            {/* Live Audio Waveform Bars (Click to Speak / Voice Mode) */}
+            <button
+              type="button"
+              onClick={toggleListening}
+              title={isListening ? 'Listening… (click to stop)' : 'Voice Mode: Speak to Dr. Zha'}
+              className="group/mic flex items-center gap-0.5 p-0.5 cursor-pointer"
+            >
+              <span
+                className={`w-1 rounded-full transition-all duration-200 ${
+                  isListening
+                    ? 'h-4 bg-cyan-400 animate-pulse'
+                    : 'h-2.5 bg-slate-400 group-hover/mic:bg-cyan-400 group-hover/mic:h-3.5'
+                }`}
+              />
+              <span
+                className={`w-1 rounded-full transition-all duration-200 ${
+                  isListening
+                    ? 'h-6 bg-cyan-400 animate-bounce'
+                    : 'h-4 bg-slate-300 group-hover/mic:bg-cyan-400 group-hover/mic:h-5'
+                }`}
+              />
+              <span
+                className={`w-1 rounded-full transition-all duration-200 ${
+                  isListening
+                    ? 'h-5 bg-cyan-400 animate-pulse delay-75'
+                    : 'h-3 bg-slate-300 group-hover/mic:bg-cyan-400 group-hover/mic:h-4'
+                }`}
+              />
+              <span
+                className={`w-1 rounded-full transition-all duration-200 ${
+                  isListening
+                    ? 'h-3.5 bg-cyan-400 animate-bounce delay-150'
+                    : 'h-2 bg-slate-400 group-hover/mic:bg-cyan-400 group-hover/mic:h-3'
+                }`}
+              />
+            </button>
+          </div>
+
+          {/* Blue Circular Action Arrow Button (->) */}
+          <button
+            type="button"
+            onClick={() => setIsOpen((prev) => !prev)}
+            aria-label="Expand AI Assistant"
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-tr from-[#0072ea] to-[#0091ff] hover:from-[#0060cc] hover:to-[#0080ea] text-white shadow-xl shadow-blue-500/40 hover:scale-110 active:scale-95 transition-all duration-200 cursor-pointer border border-white/30"
+          >
+            <ArrowRight size={20} strokeWidth={2.4} />
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

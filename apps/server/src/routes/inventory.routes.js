@@ -109,8 +109,6 @@ router.post('/items', requirePermission('inventory.manage'), asyncHandler(async 
     );
     return rows[0];
   });
-    return rows[0];
-  });
   await logAudit(null, req, { action: 'inventory.item_created', entityType: 'inventory_item', entityId: item.id, details: { name: item.name } });
   res.status(201).json({ data: mapItem(item) });
 }));

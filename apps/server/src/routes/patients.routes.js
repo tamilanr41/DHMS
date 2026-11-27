@@ -338,9 +338,6 @@ router.patch('/:id', requirePermission('patients.edit'), asyncHandler(async (req
     params
   );
   if (!rows[0]) throw ApiError.notFound('Patient not found');
-    params
-  );
-  if (!rows[0]) throw ApiError.notFound('Patient not found');
   await logAudit(null, req, { action: 'patient.updated', entityType: 'patient', entityId: id, details: body });
   res.json({ data: mapPatient(rows[0]) });
 }));

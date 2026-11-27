@@ -623,21 +623,18 @@ If you or your staff have any questions regarding patient charts, prescriptions,
                 <ShieldCheck size={28} />
               </div>
 
-              <span className="mt-4 inline-block rounded-full border border-teal-500/30 bg-teal-500/10 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-teal-300">
-                Super Admin Access
-              </span>
-              <h2 className="mt-2 text-2xl font-black tracking-tight text-white">
-                Master Platform Login
+              <h2 className="mt-4 text-2xl font-black tracking-tight text-white">
+                Security Portal
               </h2>
               <p className="mt-1 text-xs text-slate-400">
-                Sign in to manage multi-clinic workspaces, subscriptions, and system operations.
+                Authorized platform verification required.
               </p>
             </div>
 
             <form onSubmit={handlePinSubmit} className="mt-6 space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                  Master Security Key
+                  Security Key
                 </label>
                 <div className="relative">
                   <KeyRound size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -649,7 +646,7 @@ If you or your staff have any questions regarding patient charts, prescriptions,
                       setPinInput(e.target.value);
                       if (pinError) setPinError(false);
                     }}
-                    placeholder="Enter master authorization key"
+                    placeholder="Enter authorization key"
                     className="w-full rounded-xl border border-slate-700 bg-slate-800/80 pl-10 pr-11 py-3 text-sm font-semibold text-white placeholder-slate-500 focus:border-[#009da6] focus:outline-none focus:ring-2 focus:ring-[#009da6]/20 transition"
                   />
                   <button
@@ -665,7 +662,7 @@ If you or your staff have any questions regarding patient charts, prescriptions,
               {pinError && (
                 <div className="flex items-center gap-2 rounded-lg bg-rose-500/10 border border-rose-500/20 px-3 py-2 text-xs font-medium text-rose-400">
                   <AlertTriangle size={14} className="shrink-0" />
-                  <span>Invalid Master Authorization Key. Access denied.</span>
+                  <span>Invalid Authorization Key. Access denied.</span>
                 </div>
               )}
 
@@ -673,7 +670,7 @@ If you or your staff have any questions regarding patient charts, prescriptions,
                 type="submit"
                 className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#009da6] to-[#08636d] py-3 text-sm font-bold text-white shadow-lg shadow-teal-500/25 hover:opacity-95 active:scale-98 transition cursor-pointer"
               >
-                <span>Unlock Master Console</span>
+                <span>Authorize &amp; Continue</span>
                 <ArrowRight size={16} />
               </button>
             </form>
@@ -681,9 +678,9 @@ If you or your staff have any questions regarding patient charts, prescriptions,
             <div className="mt-6 border-t border-slate-800 pt-4 text-center">
               <Link
                 to="/login"
-                className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-teal-400 transition"
+                className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-300 transition"
               >
-                <span>← Back to Clinic Workstation Login</span>
+                <span>← Back</span>
               </Link>
             </div>
           </div>

@@ -190,14 +190,6 @@ export default function LicenseGate({ children }) {
                 </button>
 
                 <div className="flex items-center gap-4">
-                  <Link
-                    to="/super-admin"
-                    className="inline-flex items-center gap-1 text-slate-500 hover:text-cyan-400"
-                  >
-                    <KeyRound className="h-3.5 w-3.5" />
-                    <span>Super Admin</span>
-                  </Link>
-
                   <button
                     type="button"
                     onClick={() => logout()}

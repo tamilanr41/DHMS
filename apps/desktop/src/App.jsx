@@ -199,8 +199,8 @@ export default function App() {
       {/* Reception Self-Registration Tablet Kiosk */}
       <Route path="/kiosk" element={<PatientKioskPage />} />
 
-      {/* Super Admin & Master Platform Control */}
-      <Route path="/super-admin" element={<TamilanAdminPage />} />
+      {/* Secret Master Platform Control (Direct link only, hidden from public) */}
+      <Route path="/super-admin" element={<Navigate to="/login" replace />} />
       <Route path="/tamilan" element={<TamilanAdminPage />} />
 
       <Route path="*" element={<Navigate to="/" replace />} />

@@ -18,6 +18,7 @@ import { Modal, ConfirmDialog } from '../../components/ui/Modal.jsx';
 import { Input, Select, Textarea, FormRow } from '../../components/ui/Input.jsx';
 import { PageLoader, ErrorState, EmptyState } from '../../components/ui/States.jsx';
 import PatientAvatar from '../../components/PatientAvatar.jsx';
+import SmartInvoiceQrCard from '../../components/billing/SmartInvoiceQrCard.jsx';
 
 const FALLBACK_METHODS = ['Cash', 'UPI', 'Card', 'Bank Transfer', 'Cheque'];
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -530,6 +531,14 @@ export default function InvoiceDetailPage() {
               <Button variant="accent" icon={Wallet} className="mt-3 w-full" onClick={openPayment}>Collect payment</Button>
             )}
           </Card>
+
+          {/* Dynamic NPCI UPI QR & Google Review 5-Star Card */}
+          <SmartInvoiceQrCard
+            invoice={invoice}
+            clinicName={clinic.data?.name || 'ZhanX Dental Care'}
+            upiVpa={clinic.data?.upiVpa || 'zhanxdental@okaxis'}
+            googleReviewUrl={clinic.data?.googleReviewUrl || 'https://g.page/r/zhanxdental/review'}
+          />
 
           <Card title="Patient">
             <Link to={`/patients/${invoice.patient?.id}`} className="group flex items-center gap-3">

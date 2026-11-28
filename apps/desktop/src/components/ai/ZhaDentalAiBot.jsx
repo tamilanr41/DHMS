@@ -33,234 +33,236 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../services/auth.jsx';
 
-// ── Unique ZhanX Dental Robot Mascot SVG ────────────────────────────────────
-function ZhaDentalRobotAvatar({ isListening = false, isSpeaking = false, size = 66, className = '' }) {
+// ── Unique ZhanX Dental Robot Mascot SVG (Standing Pet Companion) ──────────────
+function ZhaDentalRobotAvatar({ isListening = false, isSpeaking = false, size = 76, className = '' }) {
+  const [blink, setBlink] = useState(false);
+
+  useEffect(() => {
+    const blinkInterval = setInterval(() => {
+      setBlink(true);
+      setTimeout(() => setBlink(false), 220);
+    }, 4200);
+    return () => clearInterval(blinkInterval);
+  }, []);
+
   return (
     <div
       className={`relative inline-flex items-center justify-center select-none transition-transform duration-300 ${className}`}
-      style={{ width: size, height: size }}
+      style={{ width: size, height: size * 1.15 }}
     >
       <svg
-        viewBox="0 0 100 118"
+        viewBox="0 0 100 125"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
-        className="w-full h-full drop-shadow-xl overflow-visible"
+        className="w-full h-full drop-shadow-2xl overflow-visible hover:scale-105 transition-transform duration-300"
       >
         <defs>
-          {/* ZhanX Brand Signature Teal Gradient */}
-          <linearGradient id="zhanxTeal" x1="10" y1="10" x2="90" y2="110" gradientUnits="userSpaceOnUse">
+          {/* ZhanX Brand Signature Teal & Cyan Shading */}
+          <linearGradient id="zhanxTeal" x1="10" y1="10" x2="90" y2="120" gradientUnits="userSpaceOnUse">
             <stop stopColor="#00d1dc" />
-            <stop offset="0.45" stopColor="#009da6" />
-            <stop offset="1" stopColor="#034d52" />
+            <stop offset="0.35" stopColor="#009da6" />
+            <stop offset="0.85" stopColor="#034d52" />
+            <stop offset="1" stopColor="#022a2e" />
           </linearGradient>
 
-          {/* Pearl Ceramic Dental White Gradient */}
-          <linearGradient id="pearlDentalWhite" x1="30" y1="10" x2="70" y2="80" gradientUnits="userSpaceOnUse">
+          {/* Pearl Ceramic Enamel Gradient */}
+          <linearGradient id="pearlDentalWhite" x1="30" y1="10" x2="70" y2="90" gradientUnits="userSpaceOnUse">
             <stop stopColor="#ffffff" />
-            <stop offset="0.7" stopColor="#f0fdfa" />
-            <stop offset="1" stopColor="#ccfbf1" />
+            <stop offset="0.6" stopColor="#f0fdfa" />
+            <stop offset="0.9" stopColor="#ccfbf1" />
+            <stop offset="1" stopColor="#99f6e4" />
           </linearGradient>
 
-          {/* Cyber Visor Screen */}
-          <linearGradient id="dentalVisor" x1="20" y1="20" x2="80" y2="60" gradientUnits="userSpaceOnUse">
+          {/* Visor Glass Gradient */}
+          <linearGradient id="dentalVisor" x1="20" y1="20" x2="80" y2="70" gradientUnits="userSpaceOnUse">
             <stop stopColor="#072024" />
             <stop offset="0.6" stopColor="#041518" />
-            <stop offset="1" stopColor="#020c0e" />
+            <stop offset="1" stopColor="#010c0e" />
           </linearGradient>
 
-          {/* Mint Cyan LED Glow Filter */}
-          <filter id="mintGlow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="2" result="blur" />
-            <feComposite in="SourceGraphic" in2="blur" operator="over" />
-          </filter>
-
-          {/* Energy Pod Glow */}
-          <filter id="podGlow" x="-30%" y="-30%" width="160%" height="160%">
-            <feGaussianBlur stdDeviation="3" result="blur" />
+          {/* Glowing Mint Filter */}
+          <filter id="mintGlow" x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur stdDeviation="2.5" result="blur" />
             <feComposite in="SourceGraphic" in2="blur" operator="over" />
           </filter>
         </defs>
 
-        {/* ── Hover Thrusters / Boots with Mint Energy Glow ── */}
+        {/* ── Sturdy Cute Robot Legs Standing Firmly ── */}
         <g>
-          {/* Energy Thrust Ambient Glow */}
-          <ellipse cx="37" cy="107" rx="8" ry="3" fill="#22d3ee" opacity="0.6" filter="url(#podGlow)" />
-          <ellipse cx="63" cy="107" rx="8" ry="3" fill="#22d3ee" opacity="0.6" filter="url(#podGlow)" />
+          {/* Left Leg */}
+          <rect x="31" y="96" width="13" height="18" rx="6.5" fill="url(#zhanxTeal)" stroke="#023b3f" strokeWidth="2.2" />
+          <ellipse cx="37.5" cy="111" rx="5" ry="2" fill="#5eead4" />
 
-          {/* Left Boot */}
-          <rect x="30" y="92" width="14" height="15" rx="7" fill="url(#zhanxTeal)" stroke="#023b3f" strokeWidth="2" />
-          <ellipse cx="37" cy="104" rx="5" ry="2" fill="#5eead4" />
+          {/* Right Leg */}
+          <rect x="56" y="96" width="13" height="18" rx="6.5" fill="url(#zhanxTeal)" stroke="#023b3f" strokeWidth="2.2" />
+          <ellipse cx="62.5" cy="111" rx="5" ry="2" fill="#5eead4" />
 
-          {/* Right Boot */}
-          <rect x="56" y="92" width="14" height="15" rx="7" fill="url(#zhanxTeal)" stroke="#023b3f" strokeWidth="2" />
-          <ellipse cx="63" cy="104" rx="5" ry="2" fill="#5eead4" />
+          {/* Contact Shadow on Dock */}
+          <ellipse cx="50" cy="116" rx="30" ry="4" fill="#000000" opacity="0.35" />
         </g>
 
-        {/* ── Robotic Arms ── */}
-        {/* Left Arm with Ceramic Hand */}
+        {/* ── Little Chubby Robotic Arms ── */}
+        {/* Left Arm */}
         <g>
           <ellipse
-            cx="19"
-            cy="73"
+            cx="18"
+            cy="75"
             rx="6.5"
-            ry="12"
-            transform="rotate(-18 19 73)"
+            ry="13"
+            transform="rotate(-15 18 75)"
             fill="url(#zhanxTeal)"
             stroke="#023b3f"
-            strokeWidth="2"
+            strokeWidth="2.2"
           />
-          <circle cx="15" cy="82" r="4.5" fill="url(#pearlDentalWhite)" stroke="#023b3f" strokeWidth="1.5" />
+          <circle cx="14" cy="85" r="5" fill="url(#pearlDentalWhite)" stroke="#023b3f" strokeWidth="1.8" />
         </g>
 
-        {/* Right Arm (Waving friendly) */}
+        {/* Right Arm (Waving friendly gesture) */}
         <g>
           <ellipse
-            cx="81"
+            cx="82"
             cy="73"
             rx="6.5"
-            ry="12"
-            transform="rotate(18 81 73)"
+            ry="13"
+            transform="rotate(22 82 73)"
             fill="url(#zhanxTeal)"
             stroke="#023b3f"
-            strokeWidth="2"
+            strokeWidth="2.2"
           />
-          <circle cx="85" cy="82" r="4.5" fill="url(#pearlDentalWhite)" stroke="#023b3f" strokeWidth="1.5" />
+          <circle cx="86" cy="83" r="5" fill="url(#pearlDentalWhite)" stroke="#023b3f" strokeWidth="1.8" />
         </g>
 
         {/* ── Chubby Robotic Dental Body / Torso ── */}
         <ellipse
           cx="50"
-          cy="75"
-          rx="25"
-          ry="22"
+          cy="77"
+          rx="27"
+          ry="24"
           fill="url(#zhanxTeal)"
           stroke="#023b3f"
-          strokeWidth="2.5"
+          strokeWidth="2.6"
         />
 
-        {/* Ceramic Dental Chest Armor Plate */}
+        {/* Ceramic Dental Belly Plaque / Shield */}
         <path
-          d="M 33 66 Q 50 63 67 66 Q 64 85 50 88 Q 36 85 33 66 Z"
+          d="M 33 67 Q 50 63 67 67 Q 65 89 50 92 Q 35 89 33 67 Z"
           fill="url(#pearlDentalWhite)"
           stroke="#087077"
-          strokeWidth="1.5"
+          strokeWidth="1.6"
         />
 
-        {/* Chest Core: Illuminated Dental Cross & Sparkle Core */}
-        <g filter="url(#mintGlow)" transform="translate(50, 75)">
-          {/* Medical Dental Cross in Brand Mint */}
-          <rect x="-2" y="-6" width="4" height="12" rx="1.5" fill="#009da6" />
-          <rect x="-6" y="-2" width="12" height="4" rx="1.5" fill="#009da6" />
-          {/* Inner neon core dot */}
-          <circle cx="0" cy="0" r="2" fill="#5eead4" />
+        {/* Chest Core: Illuminated Dental Cross or Terminal Cursor */}
+        <g filter="url(#mintGlow)" transform="translate(50, 77)">
+          <rect x="-2" y="-6.5" width="4" height="13" rx="1.5" fill="#009da6" />
+          <rect x="-6.5" y="-2" width="13" height="4" rx="1.5" fill="#009da6" />
+          <circle cx="0" cy="0" r="2.2" fill="#5eead4" />
         </g>
 
-        {/* ── Robotic Head with Dental Tooth Crown Ears ── */}
-        {/* Left Tooth Crown Ear */}
-        <g transform="translate(23, 14)">
-          <path
-            d="M 3 14 C 0 8, 3 2, 7 2 C 11 2, 14 6, 14 14 Z"
-            fill="url(#pearlDentalWhite)"
-            stroke="#023b3f"
-            strokeWidth="2"
-          />
-          <circle cx="8" cy="7" r="1.5" fill="#5eead4" />
-        </g>
+        {/* ── Head: Tooth-Crown Shaped Robot Chassis ── */}
+        {/* Left Tooth Crown Cusp */}
+        <path
+          d="M 23 23 C 18 13, 25 5, 34 8 C 42 10, 43 18, 43 23 Z"
+          fill="url(#zhanxTeal)"
+          stroke="#023b3f"
+          strokeWidth="2.2"
+        />
+        {/* Right Tooth Crown Cusp */}
+        <path
+          d="M 77 23 C 82 13, 75 5, 66 8 C 58 10, 57 18, 57 23 Z"
+          fill="url(#zhanxTeal)"
+          stroke="#023b3f"
+          strokeWidth="2.2"
+        />
 
-        {/* Right Tooth Crown Ear */}
-        <g transform="translate(63, 14)">
-          <path
-            d="M 0 14 C 0 6, 3 2, 7 2 C 11 2, 14 8, 11 14 Z"
-            fill="url(#pearlDentalWhite)"
-            stroke="#023b3f"
-            strokeWidth="2"
-          />
-          <circle cx="6" cy="7" r="1.5" fill="#5eead4" />
-        </g>
+        {/* Center Head Dome with Crown Curvature */}
+        <rect
+          x="18"
+          y="20"
+          width="64"
+          height="48"
+          rx="20"
+          fill="url(#zhanxTeal)"
+          stroke="#023b3f"
+          strokeWidth="2.6"
+        />
 
-        {/* Top Micro Dental Antenna */}
-        <line x1="50" y1="20" x2="50" y2="10" stroke="#009da6" strokeWidth="3" strokeLinecap="round" />
+        {/* Top Micro Clinic Antenna */}
+        <line x1="50" y1="20" x2="50" y2="8" stroke="#009da6" strokeWidth="3" strokeLinecap="round" />
         <circle
           cx="50"
-          cy="9"
+          cy="7"
           r="4.5"
           fill={isListening ? '#ef4444' : '#22d3ee'}
           filter="url(#mintGlow)"
           className={isListening ? 'animate-ping' : ''}
         />
-        <circle cx="50" cy="9" r="2.5" fill="#ffffff" />
+        <circle cx="50" cy="7" r="2" fill="#ffffff" />
 
-        {/* Main Robotic Helmet Chassis */}
+        {/* Glossy Visor Screen */}
         <rect
-          x="19"
-          y="20"
-          width="62"
-          height="46"
-          rx="18"
-          fill="url(#zhanxTeal)"
-          stroke="#023b3f"
-          strokeWidth="2.5"
-        />
-
-        {/* Glossy Curved Visor Screen */}
-        <rect
-          x="26"
+          x="25"
           y="26"
-          width="48"
-          height="32"
-          rx="12"
+          width="50"
+          height="34"
+          rx="14"
           fill="url(#dentalVisor)"
-          stroke="#0d4e54"
-          strokeWidth="2"
+          stroke="#0e5359"
+          strokeWidth="2.2"
         />
 
-        {/* Visor Specular Glass Reflection */}
+        {/* Visor Glass Specular Light Reflection */}
         <path
-          d="M 29 30 Q 50 27 71 30 Q 70 33 62 33 Q 48 30 29 34 Z"
+          d="M 29 30 Q 50 26 71 30 Q 69 34 60 34 Q 46 30 29 35 Z"
           fill="#ffffff"
-          opacity="0.18"
+          opacity="0.22"
         />
 
-        {/* ── Expressive Visor LED Face ── */}
+        {/* ── Visor Animated LED Face ── */}
         {isListening ? (
-          // Listening: Animated neon soundwave bars
+          // Listening Audio Visualizer Bars
           <g fill="#22d3ee" filter="url(#mintGlow)">
-            <rect x="36" y="38" width="3" height="8" rx="1.5" className="animate-pulse" />
-            <rect x="42" y="34" width="3" height="16" rx="1.5" className="animate-bounce" />
-            <rect x="48" y="32" width="3" height="20" rx="1.5" className="animate-pulse delay-75" />
-            <rect x="54" y="34" width="3" height="16" rx="1.5" className="animate-bounce delay-150" />
-            <rect x="60" y="38" width="3" height="8" rx="1.5" className="animate-pulse" />
+            <rect x="36" y="38" width="3.2" height="10" rx="1.6" className="animate-pulse" />
+            <rect x="42" y="33" width="3.2" height="18" rx="1.6" className="animate-bounce" />
+            <rect x="48" y="31" width="3.2" height="22" rx="1.6" className="animate-pulse delay-75" />
+            <rect x="54" y="33" width="3.2" height="18" rx="1.6" className="animate-bounce delay-150" />
+            <rect x="60" y="38" width="3.2" height="10" rx="1.6" className="animate-pulse" />
           </g>
         ) : isSpeaking ? (
-          // Speaking: Cheerful curved eyes & talking wave mouth
-          <g stroke="#22d3ee" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" filter="url(#mintGlow)">
-            {/* Happy curved eyes (^ ^) */}
+          // Speaking: Happy curved eyes and moving mouth
+          <g stroke="#22d3ee" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" filter="url(#mintGlow)">
             <path d="M 34 40 Q 39 34 44 40" fill="none" />
             <path d="M 56 40 Q 61 34 66 40" fill="none" />
-            {/* Friendly talking smile */}
-            <path d="M 45 48 Q 50 53 55 48" fill="none" stroke="#5eead4" strokeWidth="2.5" />
+            <path d="M 45 49 Q 50 54 55 49" fill="none" stroke="#5eead4" strokeWidth="2.8" />
+          </g>
+        ) : blink ? (
+          // Blinking eyes (- -)
+          <g stroke="#22d3ee" strokeWidth="3.2" strokeLinecap="round" filter="url(#mintGlow)">
+            <line x1="34" y1="42" x2="44" y2="42" />
+            <line x1="56" y1="42" x2="66" y2="42" />
           </g>
         ) : (
-          // Idle Friendly Clinical LED Face: Left eye glowing wink/sparkle, Right eye smart terminal cursor
+          // Default Smart Face: Left Eye Wink/Arc, Right Eye Terminal Cursor `> _`
           <g filter="url(#mintGlow)">
-            {/* Left Eye: Cute Smiling LED Arc */}
+            {/* Left Eye: Smiling Arc or Terminal `>` */}
             <path
-              d="M 34 41 Q 39 34 44 41"
+              d="M 35 37 L 41 42 L 35 47"
               stroke="#22d3ee"
               strokeWidth="3.2"
               strokeLinecap="round"
+              strokeLinejoin="round"
               fill="none"
             />
-            {/* Right Eye: Friendly Smart Terminal Eye with pulse */}
-            <g stroke="#22d3ee" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M 55 37 L 60 41 L 55 45" fill="none" />
-              <line x1="63" y1="45" x2="68" y2="45" className="animate-pulse" />
+
+            {/* Right Eye: Smart Terminal Blinking Line `_` */}
+            <g stroke="#22d3ee" strokeWidth="3.2" strokeLinecap="round">
+              <line x1="56" y1="45" x2="65" y2="45" />
             </g>
-            {/* Cute mini smile */}
+
+            {/* Subtle Friendly Smile */}
             <path
-              d="M 47 48 Q 50 51 53 48"
+              d="M 47 49 Q 50 52 53 49"
               stroke="#5eead4"
-              strokeWidth="2"
+              strokeWidth="2.2"
               strokeLinecap="round"
               fill="none"
             />
@@ -898,12 +900,12 @@ Would you like a step-by-step walkthrough or clinical dosage reference?`;
       {/* ── Main Bot Modal (Properly elevated above dock, never submerged) ── */}
       {isOpen && (
         <div
-          className="fixed right-4 sm:right-6 z-50 flex flex-col rounded-3xl border border-teal-200/90 bg-white shadow-2xl backdrop-blur-xl dark:border-teal-800/80 dark:bg-slate-900 overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+          className="fixed right-3 sm:right-6 z-[9999] flex flex-col rounded-3xl border border-teal-200/90 bg-white shadow-2xl backdrop-blur-xl dark:border-teal-800/80 dark:bg-slate-900 overflow-hidden animate-in fade-in zoom-in-95 duration-200"
           style={{
-            bottom: '120px',
-            width: 'min(420px, calc(100vw - 32px))',
-            height: 'min(580px, calc(100vh - 140px))',
-            maxHeight: 'calc(100vh - 140px)'
+            bottom: '110px',
+            width: 'min(420px, calc(100vw - 24px))',
+            maxHeight: 'calc(100vh - 125px)',
+            height: 'min(580px, calc(100vh - 125px))'
           }}
         >
           {/* Header Bar in Signature ZhanX Dental Teal */}

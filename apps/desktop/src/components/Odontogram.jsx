@@ -162,38 +162,152 @@ function toothName(number, dentition) {
   return names[position] || 'Tooth';
 }
 
-function ToothGlyph({ kind, color, selected, missing }) {
+function ToothGlyph({ kind, color, selected, missing, conditionCode = '', conditionLabel = '' }) {
   const shape = SHAPES[kind] || SHAPES.molar;
-  const stroke = selected ? '#0f2a47' : color || '#b9c5d3';
-  const crownFill = color || '#ffffff';
-  const rootFill = color ? '#ffffff' : '#f8fafc';
+  const stroke = selected ? '#0a7f8b' : color || '#94a3b8';
+
+  const isCrown = conditionCode === 'crown' || conditionLabel.toLowerCase().includes('crown') || conditionLabel.toLowerCase().includes('cap');
+  const isRct = conditionCode === 'root_canal' || conditionLabel.toLowerCase().includes('root canal') || conditionLabel.toLowerCase().includes('rct') || conditionLabel.toLowerCase().includes('endo');
+  const isImplant = conditionCode === 'implant' || conditionLabel.toLowerCase().includes('implant');
+  const isCaries = conditionCode === 'caries' || conditionLabel.toLowerCase().includes('caries') || conditionLabel.toLowerCase().includes('decay');
+  const isRestoration = conditionCode === 'restoration' || conditionLabel.toLowerCase().includes('composite') || conditionLabel.toLowerCase().includes('filling');
+
   return (
     <svg viewBox="0 0 36 54" className="h-full w-full overflow-visible" aria-hidden="true">
-      {shape.roots.map((d, idx) => (
-        <path
-          key={`root-${idx}`}
-          d={d}
-          fill={rootFill}
-          stroke={stroke}
-          strokeWidth={selected ? 1.5 : 1.15}
-          strokeLinejoin="round"
-        />
-      ))}
+      <defs>
+        {/* Pearl Enamel 3D Luster Gradient */}
+        <radialGradient id="pearlEnamel" cx="40%" cy="30%" r="70%">
+          <stop offset="0%" stopColor="#ffffff" />
+          <stop offset="65%" stopColor="#f1f5f9" />
+          <stop offset="100%" stopColor="#e2e8f0" />
+        </radialGradient>
+
+        {/* Selected Enamel Glow */}
+        <radialGradient id="selectedEnamel" cx="40%" cy="30%" r="70%">
+          <stop offset="0%" stopColor="#f0fdfa" />
+          <stop offset="70%" stopColor="#ccfbf1" />
+          <stop offset="100%" stopColor="#99f6e4" />
+        </radialGradient>
+
+        {/* Metallic Gold Crown Gradient */}
+        <linearGradient id="crownGold" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#fef08a" />
+          <stop offset="40%" stopColor="#eab308" />
+          <stop offset="100%" stopColor="#ca8a04" />
+        </linearGradient>
+
+        {/* Titanium Implant Gradient */}
+        <linearGradient id="implantTi" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#94a3b8" />
+          <stop offset="50%" stopColor="#64748b" />
+          <stop offset="100%" stopColor="#334155" />
+        </linearGradient>
+
+        {/* RCT Gutta-Percha Canal Glow */}
+        <linearGradient id="rctCanal" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#f97316" />
+          <stop offset="70%" stopColor="#ef4444" />
+          <stop offset="100%" stopColor="#b91c1c" />
+        </linearGradient>
+      </defs>
+
+      {/* Roots */}
+      {!isImplant ? (
+        shape.roots.map((d, idx) => (
+          <path
+            key={`root-${idx}`}
+            d={d}
+            fill="#f8fafc"
+            stroke={stroke}
+            strokeWidth={selected ? 1.6 : 1.2}
+            strokeLinejoin="round"
+          />
+        ))
+      ) : (
+        /* Titanium Implant Screw Post */
+        <g>
+          <path
+            d="M 14 24 L 14 48 C 14 51, 22 51, 22 48 L 22 24 Z"
+            fill="url(#implantTi)"
+            stroke="#1e293b"
+            strokeWidth="1.2"
+          />
+          <line x1="12" y1="28" x2="24" y2="28" stroke="#f1f5f9" strokeWidth="1" />
+          <line x1="12" y1="34" x2="24" y2="34" stroke="#f1f5f9" strokeWidth="1" />
+          <line x1="13" y1="40" x2="23" y2="40" stroke="#f1f5f9" strokeWidth="1" />
+          <line x1="14" y1="45" x2="22" y2="45" stroke="#f1f5f9" strokeWidth="1" />
+        </g>
+      )}
+
+      {/* RCT Root Canal Gutta-Percha Fill Lines */}
+      {isRct && (
+        <g stroke="url(#rctCanal)" strokeWidth="2.2" strokeLinecap="round">
+          <line x1="18" y1="22" x2="16" y2="48" />
+          <line x1="18" y1="22" x2="24" y2="48" />
+          <circle cx="16" cy="48" r="1.5" fill="#ef4444" />
+          <circle cx="24" cy="48" r="1.5" fill="#ef4444" />
+        </g>
+      )}
+
+      {/* Crown */}
       <path
         d={shape.crown}
-        fill={crownFill}
-        fillOpacity={color ? 0.28 : 1}
-        stroke={stroke}
-        strokeWidth={selected ? 1.8 : 1.25}
+        fill={
+          isCrown
+            ? 'url(#crownGold)'
+            : color
+            ? color
+            : selected
+            ? 'url(#selectedEnamel)'
+            : 'url(#pearlEnamel)'
+        }
+        fillOpacity={isCrown ? 0.95 : color ? 0.35 : 1}
+        stroke={isCrown ? '#a16207' : stroke}
+        strokeWidth={selected || isCrown ? 1.8 : 1.25}
         strokeLinejoin="round"
       />
-      {shape.grooves.map((d, idx) => (
-        <path key={`groove-${idx}`} d={d} fill="none" stroke={selected ? '#0f2a47' : color || '#94a3b8'} strokeWidth={0.8} strokeLinecap="round" opacity={0.55} />
+
+      {/* Crown Top Grooves */}
+      {!isCrown && shape.grooves.map((d, idx) => (
+        <path
+          key={`groove-${idx}`}
+          d={d}
+          fill="none"
+          stroke={selected ? '#0a7f8b' : color || '#94a3b8'}
+          strokeWidth={0.85}
+          strokeLinecap="round"
+          opacity={0.65}
+        />
       ))}
+
+      {/* Gold Crown Band Accent */}
+      {isCrown && (
+        <path
+          d="M 10 18 Q 18 16 26 18"
+          stroke="#ca8a04"
+          strokeWidth="1.8"
+          fill="none"
+        />
+      )}
+
+      {/* Caries Decay Pit */}
+      {isCaries && (
+        <g>
+          <ellipse cx="18" cy="14" rx="4" ry="3" fill="#3f1a09" stroke="#78350f" strokeWidth="1" />
+          <circle cx="17.5" cy="13.5" r="1.8" fill="#180408" />
+        </g>
+      )}
+
+      {/* Composite Restoration Highlight */}
+      {isRestoration && (
+        <ellipse cx="18" cy="14" rx="4.5" ry="3.5" fill="#38bdf8" fillOpacity="0.7" stroke="#0284c7" strokeWidth="1" />
+      )}
+
+      {/* Missing Tooth Extraction Slash */}
       {missing && (
-        <g stroke={color || '#64748b'} strokeWidth={1.7} strokeLinecap="round" opacity={0.9}>
-          <line x1="10" y1="8" x2="26" y2="23" />
-          <line x1="26" y1="8" x2="10" y2="23" />
+        <g stroke={color || '#ef4444'} strokeWidth={2} strokeLinecap="round" opacity={0.95}>
+          <line x1="9" y1="7" x2="27" y2="25" />
+          <line x1="27" y1="7" x2="9" y2="25" />
         </g>
       )}
     </svg>
@@ -203,6 +317,7 @@ function ToothGlyph({ kind, color, selected, missing }) {
 function Tooth({ number, upper, dentition, record, treatments, selected, onSelect, notation = 'fdi' }) {
   const kind = toothKind(number, dentition);
   const color = record?.conditionColor;
+  const conditionCode = record?.conditionCode || '';
   const conditionLabel = record?.conditionLabel || 'No finding recorded';
   const treatmentSummary = treatments.length ? ` · ${treatments.length} treatment item${treatments.length === 1 ? '' : 's'}` : '';
   const missing = ['missing', 'extraction_required'].includes(record?.conditionCode);
@@ -222,7 +337,14 @@ function Tooth({ number, upper, dentition, record, treatments, selected, onSelec
     >
       <span className={`text-[10px] font-bold leading-4 tabular-nums ${selected ? 'text-[#0a7f8b] font-black' : 'text-slate-500'}`}>{display}</span>
       <span className={`block h-[46px] w-[34px] ${upper ? 'rotate-180' : ''}`}>
-        <ToothGlyph kind={kind} color={color} selected={selected} missing={missing} />
+        <ToothGlyph
+          kind={kind}
+          color={color}
+          selected={selected}
+          missing={missing}
+          conditionCode={conditionCode}
+          conditionLabel={conditionLabel}
+        />
       </span>
       <span className="mt-0.5 h-1 w-7 rounded-full" style={{ backgroundColor: color || '#e2e8f0' }} />
       {treatments.length > 0 && (
@@ -490,6 +612,43 @@ export default function Odontogram({ patientId, canEdit = false, consultationId 
           </div>
         </div>
 
+        {/* Live Treatment Cost Estimator Banner */}
+        <div className="border-t border-teal-500/20 bg-gradient-to-r from-teal-500/10 via-slate-50 to-emerald-500/10 px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 dark:from-teal-950/40 dark:to-emerald-950/40">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#009da6] text-white text-xs font-black">
+              ₹
+            </span>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                Live Treatment Plan Estimator
+              </p>
+              <p className="text-xs font-black text-slate-900 dark:text-white">
+                {dentitionTreatments.length} procedure item{dentitionTreatments.length === 1 ? '' : 's'} linked · Total Est:{' '}
+                <span className="font-mono text-emerald-600 dark:text-emerald-400 text-sm">
+                  {formatMoney(dentitionTreatments.reduce((acc, t) => acc + (Number(t.total) || 0), 0))}
+                </span>
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Link
+              to={`/treatment-plans?patientId=${patientId}`}
+              className="inline-flex items-center gap-1 rounded-xl bg-teal-600 hover:bg-teal-500 px-3 py-1.5 text-xs font-bold text-white transition shadow-2xs"
+            >
+              <span>View Treatment Plans</span>
+              <span className="text-[10px]">➜</span>
+            </Link>
+            <Link
+              to={`/invoices/new?patientId=${patientId}`}
+              className="inline-flex items-center gap-1 rounded-xl bg-emerald-600 hover:bg-emerald-500 px-3 py-1.5 text-xs font-bold text-white transition shadow-2xs"
+            >
+              <span>Instant Invoice</span>
+              <span className="text-[10px]">➜</span>
+            </Link>
+          </div>
+        </div>
+
         <div className="border-t border-line/80 bg-slate-50/35 px-4 py-3">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
@@ -663,7 +822,11 @@ export default function Odontogram({ patientId, canEdit = false, consultationId 
                         { key: 'distal', label: 'D (Distal)' },
                         { key: 'buccal', label: 'B (Buccal)' },
                         { key: 'lingual', label: 'L (Lingual)' },
-                        { key: 'incisal', label: 'I (Incisal)' }
+                        { key: 'incisal', label: 'I (Incisal)' },
+                        { key: 'mo', label: 'MO' },
+                        { key: 'do', label: 'DO' },
+                        { key: 'mod', label: 'MOD' },
+                        { key: 'ob', label: 'OB' }
                       ].map((s) => (
                         <button
                           key={s.key}
@@ -671,7 +834,7 @@ export default function Odontogram({ patientId, canEdit = false, consultationId 
                           onClick={() => setSurface(surface === s.key ? '' : s.key)}
                           className={`rounded-md px-2 py-0.5 text-[10px] font-bold uppercase transition cursor-pointer ${
                             surface === s.key
-                              ? 'bg-navy-800 text-white shadow-2xs'
+                              ? 'bg-teal-700 text-white shadow-2xs'
                               : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                           }`}
                         >

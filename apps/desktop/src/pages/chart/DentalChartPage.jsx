@@ -4,7 +4,8 @@ import { useQuery } from '@tanstack/react-query';
 import {
   Grid3X3, ArrowLeft, ShieldAlert, Sparkles, User, Stethoscope,
   MessageCircle, ExternalLink, CalendarDays, Clock, Armchair,
-  CheckCircle2, Search, ArrowRight, UserCheck, Phone, AlertTriangle, Users
+  CheckCircle2, Search, ArrowRight, UserCheck, Phone, AlertTriangle, Users,
+  Sliders, Wand2
 } from 'lucide-react';
 import { api } from '../../services/api.js';
 import { useAuth } from '../../services/auth.jsx';
@@ -18,12 +19,16 @@ import PatientAvatar from '../../components/PatientAvatar.jsx';
 import DoccureKpiCard from '../../components/ui/DoccureKpiCard.jsx';
 import { PageLoader, ErrorState } from '../../components/ui/States.jsx';
 import heroTooth from '../../assets/dental/hero-tooth.svg';
+import BeforeAfterSlider from '../../components/clinical/BeforeAfterSlider.jsx';
+import GloveTouchModeModal from '../../components/clinical/GloveTouchModeModal.jsx';
 
 export default function DentalChartPage() {
   const { patientId } = useParams();
   const navigate = useNavigate();
   const { has } = useAuth();
   const [picked, setPicked] = useState(null);
+  const [gloveModeOpen, setGloveModeOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState('chart'); // 'chart' | 'aesthetic'
   const today = todayISO();
 
   // Load patient data if ID present
@@ -174,6 +179,13 @@ export default function DentalChartPage() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setGloveModeOpen(true)}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-[#009da6] to-emerald-600 px-3.5 py-1.5 text-xs font-black text-white shadow-md hover:scale-105 active:scale-95 transition cursor-pointer"
+                  >
+                    <span>🧤 Glove Mode (Fast Touch)</span>
+                  </button>
                   <Button
                     variant="secondary"
                     size="sm"
@@ -210,8 +222,48 @@ export default function DentalChartPage() {
               )}
             </div>
 
-            {/* Interactive 32-Tooth Odontogram Component */}
-            <Odontogram patientId={p.id} canEdit={has('chart.edit')} />
+            {/* View Switcher Tabs */}
+            <div className="flex border-b border-slate-200 bg-white px-4 pt-2 text-xs font-bold dark:border-slate-800 dark:bg-slate-900 rounded-2xl shadow-2xs">
+              <button
+                type="button"
+                onClick={() => setActiveTab('chart')}
+                className={`flex items-center gap-2 pb-3 px-3 border-b-2 transition cursor-pointer ${
+                  activeTab === 'chart'
+                    ? 'border-[#0a7f8b] text-[#0a7f8b] dark:text-teal-300 font-black'
+                    : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400'
+                }`}
+              >
+                <Grid3X3 size={15} />
+                <span>3D Pearl Enamel Odontogram</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('aesthetic')}
+                className={`flex items-center gap-2 pb-3 px-3 border-b-2 transition cursor-pointer ${
+                  activeTab === 'aesthetic'
+                    ? 'border-[#0a7f8b] text-[#0a7f8b] dark:text-teal-300 font-black'
+                    : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400'
+                }`}
+              >
+                <Sliders size={15} />
+                <span>Before &amp; After Smile Studio</span>
+              </button>
+            </div>
+
+            {/* Conditional Tab Rendering */}
+            {activeTab === 'chart' ? (
+              <Odontogram patientId={p.id} canEdit={has('chart.edit')} />
+            ) : (
+              <BeforeAfterSlider patientName={p.fullName} />
+            )}
+
+            {/* Chair-Side Glove Touch Mode Modal */}
+            <GloveTouchModeModal
+              isOpen={gloveModeOpen}
+              onClose={() => setGloveModeOpen(false)}
+              patientName={p.fullName}
+              patientId={p.id}
+            />
           </div>
         )
       ) : (

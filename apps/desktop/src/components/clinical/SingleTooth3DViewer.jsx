@@ -102,19 +102,65 @@ export default function SingleTooth3DViewer({
     // ── 4. Anatomical 3D Tooth Geometry Construction ──
     const toothGroup = new THREE.Group();
 
-    // Crown Mesh (Morphs based on tooth kind)
+    // Sculpted Organic Anatomical Crown
     let crownGeo;
     if (isMolar) {
-      crownGeo = new THREE.CylinderGeometry(1.05, 0.85, 1.25, 16, 4);
+      crownGeo = new THREE.CylinderGeometry(1.05, 0.92, 1.15, 24, 6);
+      const pos = crownGeo.attributes.position;
+      for (let i = 0; i < pos.count; i++) {
+        const x = pos.getX(i);
+        const y = pos.getY(i);
+        const z = pos.getZ(i);
+        if (y > 0.3) {
+          const angle = Math.atan2(z, x);
+          const dist = Math.sqrt(x * x + z * z);
+          const cuspBulge = Math.cos(angle * 4) * 0.16 * (dist / 1.0);
+          const centralFossa = Math.exp(-dist * 3.5) * 0.22;
+          pos.setY(i, y + cuspBulge - centralFossa);
+        }
+      }
     } else if (isPremolar) {
-      crownGeo = new THREE.CylinderGeometry(0.85, 0.7, 1.2, 14, 4);
+      crownGeo = new THREE.CylinderGeometry(0.85, 0.72, 1.1, 20, 6);
+      const pos = crownGeo.attributes.position;
+      for (let i = 0; i < pos.count; i++) {
+        const x = pos.getX(i);
+        const y = pos.getY(i);
+        const z = pos.getZ(i);
+        if (y > 0.25) {
+          const cuspLift = Math.abs(x) * 0.22 - Math.abs(z) * 0.1;
+          pos.setY(i, y + cuspLift);
+        }
+      }
     } else if (isCanine) {
-      crownGeo = new THREE.ConeGeometry(0.8, 1.4, 12);
+      crownGeo = new THREE.ConeGeometry(0.78, 1.35, 20, 6);
+      const pos = crownGeo.attributes.position;
+      for (let i = 0; i < pos.count; i++) {
+        const x = pos.getX(i);
+        const y = pos.getY(i);
+        const z = pos.getZ(i);
+        if (z > 0) pos.setZ(i, z * 1.25);
+      }
     } else {
-      // Incisor chisel crown
-      crownGeo = new THREE.BoxGeometry(1.1, 1.35, 0.65, 4, 4, 4);
+      // Central / Lateral Incisor
+      crownGeo = new THREE.BoxGeometry(1.15, 1.25, 0.52, 8, 8, 6);
+      const pos = crownGeo.attributes.position;
+      for (let i = 0; i < pos.count; i++) {
+        let x = pos.getX(i);
+        let y = pos.getY(i);
+        let z = pos.getZ(i);
+        if (y > 0.15) {
+          const factor = (y - 0.15) / 0.5;
+          z *= 1 - factor * 0.42;
+          z += Math.cos(x * 2.8) * 0.06;
+        }
+        if (y < 0) {
+          x *= 1 - Math.abs(y) * 0.32;
+        }
+        pos.setXYZ(i, x, y, z);
+      }
     }
 
+    crownGeo.computeVertexNormals();
     const crownMesh = new THREE.Mesh(crownGeo, enamelMaterial);
     crownMesh.position.y = 0.5;
     crownMesh.castShadow = true;

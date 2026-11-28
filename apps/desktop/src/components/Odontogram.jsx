@@ -10,8 +10,6 @@ import Badge from './ui/Badge.jsx';
 import { Select, Textarea } from './ui/Input.jsx';
 import { EmptyState, PageLoader, ErrorState } from './ui/States.jsx';
 import { useClinic } from '../hooks/useClinic.js';
-import RealDentalArch3D from './clinical/RealDentalArch3D.jsx';
-import SingleTooth3DViewer from './clinical/SingleTooth3DViewer.jsx';
 
 const SYSTEM_CONDITIONS = [
   { code: 'healthy', label: 'Healthy', color: '#16a34a', applies_to: 'both' },
@@ -419,7 +417,6 @@ export default function Odontogram({ patientId, canEdit = false, consultationId 
   const perioEnabled = clinic.data?.periodontalChartingEnabled !== false;
   const toothNotation = clinic.data?.toothNumbering || 'fdi';
   const [dentition, setDentition] = useState('permanent');
-  const [chartMode, setChartMode] = useState('2d'); // '2d' | '3d'
   const [selected, setSelected] = useState(null);
   const [conditionCode, setConditionCode] = useState('');
   const [surface, setSurface] = useState('');
@@ -572,33 +569,6 @@ export default function Odontogram({ patientId, canEdit = false, consultationId 
               ))}
             </div>
 
-            {/* 2D vs 3D View Switcher */}
-            <div className="flex rounded-2xl border border-teal-200/80 bg-teal-50/60 p-1 dark:border-teal-900/60 dark:bg-teal-950/40">
-              <button
-                type="button"
-                onClick={() => setChartMode('2d')}
-                className={`rounded-xl px-3 py-1.5 text-xs font-bold transition-all cursor-pointer ${
-                  chartMode === '2d'
-                    ? 'bg-[#009da6] text-white shadow-2xs'
-                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
-                }`}
-              >
-                📐 2D Chart View
-              </button>
-              <button
-                type="button"
-                onClick={() => setChartMode('3d')}
-                className={`rounded-xl px-3 py-1.5 text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
-                  chartMode === '3d'
-                    ? 'bg-gradient-to-r from-[#00d1dc] to-[#009da6] text-white shadow-md'
-                    : 'text-teal-700 dark:text-teal-300 hover:text-teal-900'
-                }`}
-              >
-                <span>💎 3D Real Anatomical Jaw</span>
-                <span className="rounded-full bg-white/20 px-1.5 py-0.2 text-[9px] font-mono">360°</span>
-              </button>
-            </div>
-
             <span className="text-[10.5px] text-slate-500">{toothNotation === 'universal' ? 'Universal' : 'FDI'} notation · {dentition === 'permanent' ? '32 permanent teeth' : '20 primary teeth'}</span>
           </div>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10.5px] text-slate-500">
@@ -608,84 +578,73 @@ export default function Odontogram({ patientId, canEdit = false, consultationId 
           </div>
         </div>
 
-        {chartMode === '3d' ? (
-          <div className="p-3 bg-slate-950">
-            <RealDentalArch3D
-              selectedTooth={selected}
-              onSelectTooth={selectTooth}
-              records={records}
-              dentition={dentition}
-            />
-          </div>
-        ) : (
-          <div className="overflow-x-auto bg-[radial-gradient(circle_at_center,rgba(219,234,254,0.35),transparent_62%)] px-3 py-4">
-            <div className="mx-auto min-w-[720px] max-w-[880px]">
-              <div className="flex items-start justify-center gap-3">
-                <Quadrant
-                  teeth={teeth.upperRight}
-                  upper
-                  dentition={dentition}
-                  records={records}
-                  treatments={treatments}
-                  selected={selected}
-                  onSelect={selectTooth}
-                  notation={toothNotation}
-                  label="Upper right"
-                  sublabel={dentition === 'permanent' ? (toothNotation === 'universal' ? 'Q1 · 1–8' : 'Q1 · 18–11') : (toothNotation === 'universal' ? 'Q5 · A–E' : 'Q5 · 55–51')}
-                />
-                <div className="mt-[26px] flex h-[78px] w-3 shrink-0 flex-col items-center justify-between">
-                  <span className="h-full w-px bg-gradient-to-b from-transparent via-line to-transparent" />
-                </div>
-                <Quadrant
-                  teeth={teeth.upperLeft}
-                  upper
-                  dentition={dentition}
-                  records={records}
-                  treatments={treatments}
-                  selected={selected}
-                  onSelect={selectTooth}
-                  notation={toothNotation}
-                  label="Upper left"
-                  sublabel={dentition === 'permanent' ? (toothNotation === 'universal' ? 'Q2 · 9–16' : 'Q2 · 21–28') : (toothNotation === 'universal' ? 'Q6 · F–J' : 'Q6 · 61–65')}
-                />
+        <div className="overflow-x-auto bg-[radial-gradient(circle_at_center,rgba(219,234,254,0.35),transparent_62%)] px-3 py-4">
+          <div className="mx-auto min-w-[720px] max-w-[880px]">
+            <div className="flex items-start justify-center gap-3">
+              <Quadrant
+                teeth={teeth.upperRight}
+                upper
+                dentition={dentition}
+                records={records}
+                treatments={treatments}
+                selected={selected}
+                onSelect={selectTooth}
+                notation={toothNotation}
+                label="Upper right"
+                sublabel={dentition === 'permanent' ? (toothNotation === 'universal' ? 'Q1 · 1–8' : 'Q1 · 18–11') : (toothNotation === 'universal' ? 'Q5 · A–E' : 'Q5 · 55–51')}
+              />
+              <div className="mt-[26px] flex h-[78px] w-3 shrink-0 flex-col items-center justify-between">
+                <span className="h-full w-px bg-gradient-to-b from-transparent via-line to-transparent" />
               </div>
+              <Quadrant
+                teeth={teeth.upperLeft}
+                upper
+                dentition={dentition}
+                records={records}
+                treatments={treatments}
+                selected={selected}
+                onSelect={selectTooth}
+                notation={toothNotation}
+                label="Upper left"
+                sublabel={dentition === 'permanent' ? (toothNotation === 'universal' ? 'Q2 · 9–16' : 'Q2 · 21–28') : (toothNotation === 'universal' ? 'Q6 · F–J' : 'Q6 · 61–65')}
+              />
+            </div>
 
-              <div className="relative my-2.5 flex items-center gap-2">
-                <span className="h-px flex-1 bg-line" />
-                <span className="rounded-full border border-line bg-white px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.18em] text-slate-400">Occlusal plane</span>
-                <span className="h-px flex-1 bg-line" />
-              </div>
+            <div className="relative my-2.5 flex items-center gap-2">
+              <span className="h-px flex-1 bg-line" />
+              <span className="rounded-full border border-line bg-white px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.18em] text-slate-400">Occlusal plane</span>
+              <span className="h-px flex-1 bg-line" />
+            </div>
 
-              <div className="flex items-start justify-center gap-3">
-                <Quadrant
-                  teeth={teeth.lowerRight}
-                  dentition={dentition}
-                  records={records}
-                  treatments={treatments}
-                  selected={selected}
-                  onSelect={selectTooth}
-                  notation={toothNotation}
-                  label="Lower right"
-                  sublabel={dentition === 'permanent' ? (toothNotation === 'universal' ? 'Q4 · 25–32' : 'Q4 · 48–41') : (toothNotation === 'universal' ? 'Q8 · P–T' : 'Q8 · 85–81')}
-                />
-                <div className="mt-[26px] flex h-[78px] w-3 shrink-0 flex-col items-center justify-between">
-                  <span className="h-full w-px bg-gradient-to-b from-transparent via-line to-transparent" />
-                </div>
-                <Quadrant
-                  teeth={teeth.lowerLeft}
-                  dentition={dentition}
-                  records={records}
-                  treatments={treatments}
-                  selected={selected}
-                  onSelect={selectTooth}
-                  notation={toothNotation}
-                  label="Lower left"
-                  sublabel={dentition === 'permanent' ? (toothNotation === 'universal' ? 'Q3 · 17–24' : 'Q3 · 31–38') : (toothNotation === 'universal' ? 'Q7 · K–O' : 'Q7 · 71–75')}
-                />
+            <div className="flex items-start justify-center gap-3">
+              <Quadrant
+                teeth={teeth.lowerRight}
+                dentition={dentition}
+                records={records}
+                treatments={treatments}
+                selected={selected}
+                onSelect={selectTooth}
+                notation={toothNotation}
+                label="Lower right"
+                sublabel={dentition === 'permanent' ? (toothNotation === 'universal' ? 'Q4 · 25–32' : 'Q4 · 48–41') : (toothNotation === 'universal' ? 'Q8 · P–T' : 'Q8 · 85–81')}
+              />
+              <div className="mt-[26px] flex h-[78px] w-3 shrink-0 flex-col items-center justify-between">
+                <span className="h-full w-px bg-gradient-to-b from-transparent via-line to-transparent" />
               </div>
+              <Quadrant
+                teeth={teeth.lowerLeft}
+                dentition={dentition}
+                records={records}
+                treatments={treatments}
+                selected={selected}
+                onSelect={selectTooth}
+                notation={toothNotation}
+                label="Lower left"
+                sublabel={dentition === 'permanent' ? (toothNotation === 'universal' ? 'Q3 · 17–24' : 'Q3 · 31–38') : (toothNotation === 'universal' ? 'Q7 · K–O' : 'Q7 · 71–75')}
+              />
             </div>
           </div>
-        )}
+        </div>
 
         {/* Live Treatment Cost Estimator Banner */}
         <div className="border-t border-teal-500/20 bg-gradient-to-r from-teal-500/10 via-slate-50 to-emerald-500/10 px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 dark:from-teal-950/40 dark:to-emerald-950/40">
@@ -794,14 +753,6 @@ export default function Odontogram({ patientId, canEdit = false, consultationId 
             </div>
           ) : (
             <div className="px-4 py-3 space-y-3">
-              {/* Isolated Real 3D Anatomical Tooth Inspection Canvas */}
-              <SingleTooth3DViewer
-                toothNumber={selected}
-                conditionCode={currentRecord?.conditionCode}
-                conditionLabel={currentRecord?.conditionLabel}
-                dentition={dentition}
-              />
-
               <div className="rounded-lg border border-line/80 bg-slate-50/55 p-3">
                 {currentRecord ? (
                   <>

@@ -11,6 +11,32 @@ import { Select, Textarea } from './ui/Input.jsx';
 import { EmptyState, PageLoader, ErrorState } from './ui/States.jsx';
 import { useClinic } from '../hooks/useClinic.js';
 
+const SYSTEM_CONDITIONS = [
+  { code: 'healthy', label: 'Healthy', color: '#16a34a', applies_to: 'both' },
+  { code: 'caries', label: 'Caries / Decay', color: '#dc2626', applies_to: 'both' },
+  { code: 'missing', label: 'Missing', color: '#475569', applies_to: 'both' },
+  { code: 'fractured', label: 'Fractured / Broken', color: '#f97316', applies_to: 'both' },
+  { code: 'restored', label: 'Restored / Filling', color: '#2563eb', applies_to: 'both' },
+  { code: 'crown', label: 'Crown (Cap)', color: '#7c3aed', applies_to: 'both' },
+  { code: 'rct', label: 'Root Canal Treated', color: '#0891b2', applies_to: 'permanent' },
+  { code: 'extraction_required', label: 'Extraction Required', color: '#b91c1c', applies_to: 'both' },
+  { code: 'impacted', label: 'Impacted', color: '#a16207', applies_to: 'both' },
+  { code: 'sensitive', label: 'Sensitive', color: '#ca8a04', applies_to: 'both' },
+  { code: 'under_treatment', label: 'Under Treatment', color: '#0d9488', applies_to: 'both' },
+  { code: 'implant', label: 'Dental Implant', color: '#0f766e', applies_to: 'both' },
+  { code: 'bridge', label: 'Bridge / Pontic', color: '#6d28d9', applies_to: 'both' },
+  { code: 'veneer', label: 'Aesthetic Veneer', color: '#c026d3', applies_to: 'both' },
+  { code: 'sealant', label: 'Pit & Fissure Sealant', color: '#0ea5e9', applies_to: 'both' },
+  { code: 'inlay', label: 'Inlay / Onlay', color: '#1d4ed8', applies_to: 'both' },
+  { code: 'post_core', label: 'Post & Core', color: '#7e22ce', applies_to: 'both' },
+  { code: 'gingivitis', label: 'Gingivitis', color: '#f43f5e', applies_to: 'both' },
+  { code: 'periodontitis', label: 'Periodontitis', color: '#be123c', applies_to: 'both' },
+  { code: 'abscess', label: 'Periapical Abscess', color: '#dc2626', applies_to: 'both' },
+  { code: 'attrition', label: 'Attrition / Wear', color: '#a8a29e', applies_to: 'both' },
+  { code: 'erosion', label: 'Erosion', color: '#d97706', applies_to: 'both' },
+  { code: 'other', label: 'Other Finding', color: '#64748b', applies_to: 'both' }
+];
+
 const ADULT = {
   upperRight: ['18', '17', '16', '15', '14', '13', '12', '11'],
   upperLeft: ['21', '22', '23', '24', '25', '26', '27', '28'],
@@ -455,7 +481,14 @@ export default function Odontogram({ patientId, canEdit = false, consultationId 
   const proposedCount = dentitionTreatments.filter((t) => ['proposed', 'accepted'].includes(t.status)).length;
   const completedCount = dentitionTreatments.filter((t) => t.status === 'completed').length;
 
-  const conditions = (conditionsQuery.data || []).filter((c) => c.applies_to === 'both' || c.applies_to === dentition);
+  const rawConditions = (conditionsQuery.data && conditionsQuery.data.length > 0)
+    ? conditionsQuery.data
+    : SYSTEM_CONDITIONS;
+
+  const conditions = rawConditions.filter((c) => {
+    const applies = c.applies_to || c.appliesTo || 'both';
+    return applies === 'both' || applies === dentition;
+  });
   const currentRecord = selected ? records.get(selected) : null;
   const selectedTreatments = selected ? treatments.get(selected) || [] : [];
   const teeth = dentition === 'permanent' ? ADULT : PRIMARY;
@@ -657,7 +690,7 @@ export default function Odontogram({ patientId, canEdit = false, consultationId 
                 <span className="flex items-center gap-1.5 text-[10.5px] text-slate-600">
                   <span className="h-2.5 w-2.5 rounded-sm border border-slate-300 bg-white" /> Not recorded
                 </span>
-                {(conditionsQuery.data || []).map((c) => (
+                {rawConditions.map((c) => (
                   <span key={c.code} className="flex items-center gap-1.5 text-[10.5px] text-slate-600">
                     <span className="h-2.5 w-2.5 rounded-sm border border-black/10" style={{ backgroundColor: c.color }} /> {c.label}
                   </span>
